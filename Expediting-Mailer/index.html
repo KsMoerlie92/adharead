@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expediting Mailer · IHC Expedite 2.0</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<link rel="stylesheet" href="../shared/expediting-mailer.css">
+<style>
+:root{--ihc-red:#D91F2C;--ihc-navy:#0A1628;--ihc-mid:#0F2040;--ihc-steel:#1e3a6e;--ihc-teal:#00B4D8;--ihc-white:#F0F4FA;--ihc-muted:#6b7a99;--ihc-mono:'JetBrains Mono','Courier New',monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow',Arial,sans-serif;background:var(--ihc-navy);color:var(--ihc-white);min-height:100vh}
+.wrap{max-width:780px;margin:0 auto;padding:1.5rem}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:1.7rem;font-weight:800;margin-bottom:.2rem}
+h1 .r{color:var(--ihc-red)}
+.lead{color:var(--ihc-muted);margin-bottom:1.2rem;font-size:.92rem}
+.lead a{color:var(--ihc-teal)}
+.dz{background:var(--ihc-mid);border:2px dashed var(--ihc-steel);border-radius:10px;padding:2rem;text-align:center}
+.dz.drag{border-color:var(--ihc-teal)}
+.btn{display:inline-block;background:var(--ihc-teal);color:var(--ihc-navy);border:0;border-radius:7px;padding:.55rem 1.1rem;font-weight:700;font-family:var(--ihc-mono);font-size:.78rem;cursor:pointer}
+.muted{color:var(--ihc-muted);font-size:.76rem;font-family:var(--ihc-mono)}
+.banner{background:#0c2a1f;border:1px solid #2a9d6b;color:#8fe3c0;border-radius:8px;padding:.6rem .9rem;font-size:.78rem;font-family:var(--ihc-mono);margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}
+.banner a{color:#bff3dc;font-weight:700}
+.kpis{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
+.kpi{background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-radius:8px;padding:.6rem .9rem;text-align:center;flex:1;min-width:84px}
+.kpi b{display:block;font-size:1.3rem;font-family:'Barlow Condensed',sans-serif;color:var(--ihc-teal)}
+.kpi small{color:var(--ihc-muted);font-size:.6rem;text-transform:uppercase;letter-spacing:.06em}
+.panel{background:var(--ihc-mid);border:1px solid var(--ihc-steel);border-radius:10px;overflow:hidden}
+.ph{background:var(--ihc-navy);color:#cfe0f4;padding:.6rem .9rem;font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;font-family:var(--ihc-mono);border-bottom:2px solid var(--ihc-red)}
+.pb{padding:.8rem .9rem}
+.tools{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem}
+.tools input{flex:1;min-width:120px;padding:.5rem .7rem;border:1px solid var(--ihc-steel);border-radius:7px;background:#0c1a36;color:var(--ihc-white);font-family:var(--ihc-mono);font-size:.78rem}
+.chip{border:1px solid var(--ihc-steel);background:#0c1a36;border-radius:16px;padding:.35rem .7rem;font-size:.7rem;font-weight:600;color:var(--ihc-muted);cursor:pointer;font-family:var(--ihc-mono)}
+.chip.on{background:var(--ihc-teal);color:var(--ihc-navy);border-color:var(--ihc-teal)}
+.suplist{max-height:60vh;overflow:auto;border-top:1px solid var(--ihc-steel)}
+.sup{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;border-bottom:1px solid var(--ihc-steel);cursor:pointer}
+.sup:hover{background:#0c1a36}
+.score{font-weight:800;min-width:44px;text-align:center;padding:.35rem 0;border-radius:6px;color:#fff;font-size:.82rem;font-family:'Barlow Condensed',sans-serif}
+.s-hi{background:var(--ihc-red)}.s-md{background:#e0a500;color:#1a1200}.s-lo{background:#2a9d6b}
+.nm{flex:1;min-width:0}.nm b{display:block;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--ihc-mono)}
+.nm small{color:var(--ihc-muted);font-size:.66rem;font-family:var(--ihc-mono)}
+.mini{margin-right:.5rem}.mini.l{color:#ff6b5e}.mini.u{color:#ffce5a}
+</style>
+</head>
+<body>
+<script src="../shared/site-gate.js"></script>
+<div class="wrap">
+  <h1>Expediting <span class="r">Mailer</span></h1>
+  <p class="lead">Werklijst per leverancier, gebundeld over alle projecten. Selecteer een leverancier om een
+    uitvraag op te stellen en als <code>.eml</code> in Outlook te openen.</p>
+
+  <div id="dropzone" class="dz">
+    <p class="muted" style="margin-bottom:.7rem">Geen centrale lijst gevonden. Upload hier, of doe dit eenmalig op de
+      <a href="../Admin/" style="color:var(--ihc-teal)">Admin-pagina</a>.</p>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsm" hidden>
+    <label class="btn" for="fileInput">Bestand kiezen</label>
+    <span class="muted" id="loadMsg" style="margin-left:.5rem">of sleep het bestand hierheen</span>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="banner" id="srcBanner"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="panel">
+      <div class="ph">Werklijst · prioriteit <span id="supCount" style="color:#9fb3d1"></span></div>
+      <div class="pb">
+        <div class="tools"><input type="text" id="search" placeholder="zoek leverancier / project…"></div>
+        <div class="tools">
+          <span class="chip on" data-f="all">Alle open</span>
+          <span class="chip" data-f="late">Te laat</span>
+          <span class="chip" data-f="unconf">Onbevestigd</span>
+          <span class="chip" data-f="multi">Multi-project</span>
+        </div>
+      </div>
+      <div class="suplist" id="suplist"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Expediting Mailer (gedeelde functie) -->
+<script src="../shared/templates.js"></script>
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
+<script src="../shared/expediting-mailer.js"></script>
+<script>
+let LINES=[], SUPPLIERS=[], curFilter='all';
+const dz=document.getElementById('dropzone'),fi=document.getElementById('fileInput');
+
+(async function init(){
+  const stored=await ExpeditingData.load();
+  if(stored&&stored.length){ const meta=await ExpeditingData.meta(); boot(stored,meta,true); }
+})();
+
+fi.onchange=e=>{ if(e.target.files[0]) read(e.target.files[0]); };
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)read(f);});
+
+function read(file){
+  document.getElementById('loadMsg').textContent='Inlezen…';
+  const r=new FileReader();
+  r.onload=async ev=>{ try{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+    const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const lines=ExpeditingCore.normalizeFromRaw(raw);
+    await ExpeditingData.save(lines,{filename:file.name});
+    boot(lines,{filename:file.name,uploaded:new Date().toISOString()},false);
+  }catch(err){ document.getElementById('loadMsg').textContent='Fout: '+err.message; } };
+  r.readAsArrayBuffer(file);
+}
+
+function boot(lines,meta,fromStore){
+  LINES=lines; SUPPLIERS=ExpeditingCore.aggregate(LINES);
+  dz.style.display='none'; document.getElementById('app').style.display='block';
+  document.getElementById('srcBanner').innerHTML=
+    '<span>Centrale lijst: <b>'+ExpeditingCore.esc((meta&&meta.filename)||'lijst')+'</b>'+(fromStore?' (uit opslag)':' (zojuist geüpload)')+' · '+LINES.length.toLocaleString('nl-NL')+' open regels</span>'+
+    '<a href="../Admin/">beheren</a>';
+  renderKpis(); renderSuppliers();
+}
+function renderKpis(){
+  const multi=SUPPLIERS.filter(s=>s.nProj>1).length, late=LINES.filter(o=>o.late).length, unconf=LINES.filter(o=>o.unconf).length;
+  document.getElementById('kpis').innerHTML=[[SUPPLIERS.length,'leveranciers'],[LINES.length,'open regels'],[multi,'multi-project'],[late,'te laat'],[unconf,'onbevestigd']]
+    .map(p=>'<div class="kpi"><b>'+p[0].toLocaleString('nl-NL')+'</b><small>'+p[1]+'</small></div>').join('');
+}
+function passFilter(g){ if(curFilter==='late')return g.late>0; if(curFilter==='unconf')return g.unconf>0; if(curFilter==='multi')return g.nProj>1; return true; }
+function renderSuppliers(){
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  const list=SUPPLIERS.filter(passFilter).filter(g=>!q||g.supplier.toLowerCase().includes(q)||[...g.projects].some(p=>String(p).toLowerCase().includes(q)));
+  document.getElementById('supCount').textContent=list.length+' van '+SUPPLIERS.length;
+  const maxS=SUPPLIERS.length?SUPPLIERS[0].score:1, el=document.getElementById('suplist');
+  el.innerHTML=list.slice(0,300).map(g=>{
+    const cls=g.score>maxS*0.5?'s-hi':g.score>maxS*0.2?'s-md':'s-lo';
+    return '<div class="sup" data-s="'+ExpeditingCore.esc(g.supplier)+'">'+
+      '<div class="score '+cls+'">'+Math.round(g.score)+'</div>'+
+      '<div class="nm"><b>'+ExpeditingCore.esc(g.supplier)+'</b><small>'+
+        '<span class="mini">'+g.lines.length+' regels · '+g.nProj+' proj</span>'+
+        (g.late?'<span class="mini l">▲ '+g.late+' laat</span>':'')+
+        (g.unconf?'<span class="mini u">● '+g.unconf+' onbev.</span>':'')+
+      '</small></div></div>';
+  }).join('')||'<div style="padding:1.8rem;text-align:center;color:var(--ihc-muted);font-family:var(--ihc-mono)">Geen leveranciers in deze selectie.</div>';
+  el.querySelectorAll('.sup').forEach(n=>n.onclick=()=>ExpeditingMailer.openForSupplier(n.dataset.s));
+}
+document.getElementById('search').addEventListener('input',renderSuppliers);
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); curFilter=c.dataset.f; renderSuppliers(); });
+</script>
+<script src="../shared/shared.js"></script>
+</body>
+</html>

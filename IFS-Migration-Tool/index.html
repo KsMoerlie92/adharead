@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IFS Migration Tool — Royal IHC</title>
+<link rel="stylesheet" href="style.css">
+<!-- SheetJS (client-side .xlsx parsing) — pinned version -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<script src="../shared/site-gate.js"></script>
+
+<header class="app-header">
+  <div class="app-header__brand">
+    <span class="app-header__icon">🔁</span>
+    <h1>IFS Migration Tool</h1>
+  </div>
+  <span class="app-header__sub">Royal IHC · Web Port</span>
+</header>
+
+<div class="toolbar">
+  <button type="button" id="btn-import" class="btn btn--primary">📋 Import from Clipboard</button>
+  <button type="button" id="btn-import-itemlist" class="btn btn--primary">📥 Import Itemlijst (.xlsx)</button>
+  <button type="button" id="btn-export" class="btn btn--success">📤 Export to Clipboard</button>
+  <button type="button" id="btn-clear" class="btn btn--danger">🗑️ Clear</button>
+  <input type="file" id="itemlist-file-input" class="file-input-hidden" accept=".xlsx,.xls">
+</div>
+
+<div id="status-bar" class="status-bar"></div>
+
+<div id="table-container" class="table-container">
+  <!-- Rendered by TableManager.render() -->
+</div>
+
+<script src="../shared/ifs-lparts-columns.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
