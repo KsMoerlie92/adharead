@@ -1,0 +1,170 @@
+:root{
+  /* IHC-huisstijl — gelijk aan shared/nav.css zodat de bovenbalk aansluit */
+  --ihc-red:#D91F2C; --ihc-navy:#0A1628; --ihc-mid:#0F2040; --ihc-muted:#6b7a99;
+  --ihc-mono:'JetBrains Mono','Courier New',monospace;
+  --ihc-nav-h:48px;
+  --kpi-navy-2:#0a4a86; --gold:#E8B923; --blue:#4A90C2;
+  /* Vaste, NIET thema-afhankelijke navy — voor plekken waar de kleur zelf de
+     achtergrond IS (knoppen, tabelkoppen) en er dus altijd witte tekst op
+     moet blijven staan, ongeacht donker/licht. --kpi-navy (verderop, wél
+     thema-afhankelijk) is voor tekst/accenten op de pagina-achtergrond. */
+  --kpi-navy-solid:#003366;
+  /* Donker = standaard (zelfde conventie als shared/nav.css: geen
+     data-theme-attribuut, of "dark", betekent donker). Licht wordt hieronder
+     bewust overschreven via html[data-theme="light"] — die heeft hogere
+     specificiteit dan dit kale :root, dus die wint zodra hij van toepassing is. */
+  --bg:#0A1628; --card:#0F2040; --text:#e8edf5; --muted:#6b7a99; --border:#1e3a6e;
+  --kpi-navy:#7fb3e8;
+  --ok:#4ade80; --ok-bg:rgba(74,222,128,.15);
+  --warn:#fbbf24; --warn-bg:rgba(251,191,36,.15);
+  --bad:#f87171; --bad-bg:rgba(248,113,113,.15);
+  --na:#6b7a99; --na-bg:rgba(107,122,153,.15);
+  --shadow:0 2px 8px rgba(0,0,0,.3);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.45);
+}
+/* Licht thema — bewuste keuze via de thema-schakelaar (zelfde waarden als
+   dit bestand vóór de donker-standaard-herziening had). */
+html[data-theme="light"]{
+  --bg:#f4f6f9; --card:#ffffff; --text:#1f2937; --muted:#6b7280; --border:#e2e8f0;
+  --kpi-navy:#003366;
+  --ok:#2e7d32; --ok-bg:#C6EFCE;
+  --warn:#8a6d00; --warn-bg:#FFEB9C;
+  --bad:#C62828; --bad-bg:#FFC7CE;
+  --na:#94a3b8; --na-bg:#eef2f6;
+  --shadow:0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.14);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--text); line-height:1.45;}
+/* plakt onder de vaste shared nav (die is 48px + 2px rand) */
+.app-header{position:sticky; top:calc(var(--ihc-nav-h) + 2px); z-index:50; background:var(--ihc-mid); color:var(--ihc-white,#fff);
+  height:var(--ihc-nav-h); border-bottom:2px solid var(--ihc-red); box-shadow:var(--shadow);}
+.header-inner{max-width:1200px; margin:0 auto; height:100%; padding:0 .75rem; display:flex;
+  align-items:center; justify-content:space-between; gap:16px;}
+.brand{display:flex; align-items:center; gap:.55rem; min-width:0}
+.brand-mark{width:16px;height:16px;background:var(--ihc-red);border-radius:2px;display:inline-block;flex:none}
+.app-header h1{font-family:var(--ihc-mono); font-size:.68rem; font-weight:700; margin:0;
+  letter-spacing:.04em; text-transform:uppercase; white-space:nowrap;}
+.subtitle{display:none}
+.milestones{display:flex; gap:6px; flex-wrap:nowrap; overflow:hidden}
+.pill{background:rgba(217,31,44,.12); color:var(--ihc-white,#e6ecf5); border:1px solid rgba(217,31,44,.45);
+  padding:2px 8px; border-radius:999px; font-family:var(--ihc-mono); font-size:.58rem;
+  font-weight:700; white-space:nowrap;}
+.container{max-width:1200px; margin:0 auto; padding:22px 20px 40px}
+section{margin-bottom:28px}
+.controls{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; background:var(--card);
+  border:1px solid var(--border); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow);}
+.control{display:flex; flex-direction:column; gap:6px}
+.control label{font-size:.72rem; font-weight:700; color:var(--kpi-navy); text-transform:uppercase; letter-spacing:.5px}
+
+/* Dropdown-pijltje als pure CSS (geen SVG-URL → onmogelijk te mangelen bij plakken) */
+select{appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  background-color:var(--card);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--kpi-navy) 50%),
+    linear-gradient(135deg, var(--kpi-navy) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  border:1px solid var(--border); border-radius:8px; padding:9px 34px 9px 12px; font-size:.9rem;
+  color:var(--text); min-width:190px; cursor:pointer; transition:border .15s, box-shadow .15s;}
+#subprojectSelect{min-width:260px}
+select:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(232,185,35,.35)}
+
+/* ── Sub Project ID-selectie (Validator-stijl in KPI-dashboard) ─────────── */
+.val-sp-wrap{display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin:0;}
+.val-sp-label{display:flex; align-items:center; gap:.5rem; font-family:var(--ihc-mono); font-size:.72rem;
+  font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--kpi-navy);}
+.val-sp-label .val-select{text-transform:none; letter-spacing:0;}
+.val-sp-status{font-family:var(--ihc-mono); font-size:.7rem; color:var(--blue);}
+
+.legend{display:flex; gap:16px; margin-left:auto; flex-wrap:wrap; align-items:center}
+.legend-item{display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--muted)}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)} .dot.na{background:var(--na)}
+.upload-panel{background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px;}
+.upload-info h3{margin:0 0 6px; color:var(--kpi-navy); font-size:1rem}
+.upload-info p{margin:0; font-size:.86rem; color:var(--muted)}
+.upload-actions{display:flex; gap:10px; flex-wrap:wrap}
+.btn{padding:9px 16px; border-radius:8px; font-weight:600; cursor:pointer; border:1px solid transparent;
+  font-size:.88rem; transition:background .15s, border .15s, color .15s;}
+.btn-primary{background:var(--kpi-navy-solid); color:#fff}
+.btn-primary:hover{background:var(--kpi-navy-2)}
+.btn-ghost{background:transparent; color:var(--kpi-navy); border-color:var(--border)}
+.btn-ghost:hover{background:rgba(127,150,190,.10)}
+.drop-zone{border:2px dashed var(--border); border-radius:10px; padding:26px; text-align:center;
+  color:var(--muted); background:var(--card); transition:border .15s, background .15s; font-size:.9rem}
+.drop-zone.dragover{border-color:var(--gold); background:rgba(232,185,35,.10); color:var(--kpi-navy)}
+.upload-status{font-size:.85rem; min-height:1em}
+.upload-status .ok-msg{color:var(--ok); font-weight:600}
+.upload-status .err-msg{color:var(--bad); font-weight:600}
+.upload-status .info-msg{color:var(--kpi-navy)}
+.badge{display:inline-block; background:#FFF3CC; color:var(--kpi-navy-solid); padding:4px 10px;
+  border-radius:999px; font-size:.78rem; font-weight:600; margin-bottom:12px;}
+.section-title{font-size:1.05rem; color:var(--kpi-navy); font-weight:700; margin:0 0 14px;
+  padding-left:12px; border-left:4px solid var(--gold);}
+.cards-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px}
+.card{background:var(--card); border:1px solid var(--border); border-left:4px solid var(--na);
+  border-radius:12px; padding:16px; box-shadow:var(--shadow); cursor:pointer;
+  transition:transform .15s, box-shadow .15s, border-color .15s; display:flex; flex-direction:column; gap:6px;}
+.card:hover{transform:translateY(-3px); box-shadow:var(--shadow-lg)}
+.card.active{border-color:var(--gold); box-shadow:0 0 0 2px rgba(232,185,35,.35), var(--shadow)}
+.card.ok{border-left-color:var(--ok)} .card.warn{border-left-color:var(--warn)} .card.bad{border-left-color:var(--bad)}
+/* Per-KPI themakleur — vaste achtergrondtint per kaart, los van de status
+   (rood/geel/groen blijft de kleine stip + linkerrand). Kleuren gesampeld
+   uit de oorspronkelijke weergave. Kaarten zonder eigen thema (Urgent
+   Expediting %, Field expedite visits) houden gewoon var(--card). */
+.card-theme-avg_delay{background:#635726}
+.card-theme-critical_delay{background:#244766}
+.card-theme-not_yet_expedited{background:#183F2C}
+.card-theme-not_confirmed_pct{background:#551D28}
+.card-theme-stale_admin_pct{background:#372D58}
+.card-theme-validated_lists{background:#6A5027}
+.card-head{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.card-name{font-weight:700; color:var(--kpi-navy); font-size:.92rem}
+.card-value{font-size:1.8rem; font-weight:800; color:var(--text); line-height:1.1}
+.card-value .unit{font-size:.9rem; font-weight:600; color:var(--muted); margin-left:2px}
+.card-norm{font-size:.78rem; color:var(--muted)}
+.card-auto{font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px}
+.card-auto.auto{color:var(--ok)} .card-auto.manual{color:var(--warn)}
+.card-def{font-size:.72rem; color:var(--muted); margin-top:2px}
+.status-dot{width:14px;height:14px;border-radius:50%}
+.status-dot.ok{background:var(--ok)} .status-dot.warn{background:var(--warn)}
+.status-dot.bad{background:var(--bad)} .status-dot.na{background:var(--na)}
+.chart-wrap{background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:18px; box-shadow:var(--shadow); position:relative; height:380px;}
+.chart-wrap canvas{max-height:344px}
+.note{font-size:.8rem; color:var(--muted); margin:0 0 10px}
+.table-wrap{overflow-x:auto; background:var(--card); border:1px solid var(--border);
+  border-radius:12px; box-shadow:var(--shadow)}
+table{border-collapse:collapse; width:100%; min-width:520px}
+th,td{padding:10px 12px; text-align:center; border-bottom:1px solid var(--border); font-size:.88rem}
+thead th{background:var(--kpi-navy-solid); color:#fff; font-weight:600; position:sticky; top:0}
+tbody td:first-child, tbody th:first-child{text-align:left; font-weight:700; color:var(--kpi-navy);
+  background:rgba(127,150,190,.08); white-space:nowrap;}
+td.ok{background:var(--ok-bg); color:var(--ok); font-weight:600}
+td.warn{background:var(--warn-bg); color:var(--warn); font-weight:600}
+td.bad{background:var(--bad-bg); color:var(--bad); font-weight:600}
+td.na{background:var(--na-bg); color:var(--na)}
+.app-footer{border-top:1px solid var(--border); background:var(--card); padding:18px 20px;
+  text-align:center; color:var(--muted); font-size:.82rem;}
+.app-footer code{background:rgba(127,150,190,.12); padding:2px 6px; border-radius:5px; color:var(--kpi-navy); font-weight:600}
+.muted{color:var(--muted)}
+.sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0,0,0,0); white-space:nowrap; border:0;}
+@media (max-width:720px){
+  .milestones{display:none}
+  .controls{padding:14px}
+  select{min-width:100%; width:100%}
+  #subprojectSelect{min-width:100%}
+  .control{width:100%}
+  .legend{margin-left:0}
+  .upload-actions{flex-direction:column}
+  .btn{width:100%; text-align:center}
+  .card-value{font-size:1.5rem}
+}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal IHC — Large Item Overview</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<link rel="stylesheet" href="../PO-Matcher/styles.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<script src="../shared/site-gate.js"></script>
+
+<div class="site-wrapper">
+  <section class="content-panel">
+
+    <div class="section-head"><span class="red-mark"></span>Large Item Overview</div>
+
+    <!-- Databron -->
+    <div class="lio-source" id="lio-source">
+      <span class="lio-src-txt" id="lio-src-txt">Bedrijfsbrede lijst laden…</span>
+      <div class="lio-src-actions">
+        <input type="file" id="lio-file" accept=".xlsx,.xls,.xlsm" style="display:none">
+        <button class="btn-val" id="lio-upload">📄 Andere lijst laden…</button>
+      </div>
+    </div>
+    <div id="lio-warnings"></div>
+
+    <!-- Sub Project ID selectie -->
+    <div id="lio-sp-panel"></div>
+
+    <!-- Tabbladen -->
+    <div class="lio-tabs">
+      <button class="lio-tab active" data-tab="large">🏗️ Large Items</button>
+      <button class="lio-tab" data-tab="late">⏰ Late Items</button>
+      <button class="lio-tab" data-tab="fat">🧪 FAT Overview</button>
+      <input class="lio-search" id="lio-search" type="text"
+        placeholder="🔍 Zoek in alle kolommen…" oninput="lioSearch(this.value)"
+        title="Zoek op elke combinatie van woorden, verspreid over alle zichtbare kolommen">
+      <div class="lio-tab-tools" id="lio-tools"></div>
+    </div>
+
+    <div id="lio-summary" class="lio-summary"></div>
+
+    <div class="lio-table-wrap">
+      <table class="lio-table">
+        <thead id="lio-thead"></thead>
+        <tbody id="lio-tbody"></tbody>
+      </table>
+    </div>
+
+  </section>
+</div>
+
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js"></script>
+<script src="app.js"></script>
+<script src="../shared/shared.js"></script>
+</body>
+</html>
