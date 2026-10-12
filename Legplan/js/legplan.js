@@ -199,47 +199,14 @@ async function runLegplanAI() {
   _containerPlan = _best.plan;
   _activeContainerIdx = 0;
 
-  if(!_containerPlan.length){ btn.disabled=false; btn.textContent='🤖 Container Advies'; return; }
+  if(!_containerPlan.length){ btn.disabled=false; btn.textContent='📦 Container Advies'; return; }
 
   // Show result panel
   resultEl.classList.add('visible');
   buildContainerNav();
   showContainerView(0);   // draws canvases, legend, cargo table, stats for container 1
 
-  // ── Claude API advice ───────────────────────────────────────────────────
-  const apiKey=document.getElementById('legplan-apikey').value.trim();
-  const adviceEl=document.getElementById('lp-advice-text');
-  if(!apiKey){
-    if(adviceEl)adviceEl.innerHTML='<em style="color:var(--muted)">Vul een API key in voor AI-advies.</em>';
-    btn.disabled=false; btn.textContent='🤖 Container Advies'; return;
-  }
-  if(adviceEl)adviceEl.innerHTML='<em style="color:var(--muted)">AI analyseert…</em>';
-  btn.textContent='⏳ AI…';
-
-  // Build summary across all containers for the prompt
-  const allPlaced = _containerPlan.flatMap(cp => cp.placed);
-  const totalUnplaced = units.filter(u => !allPlaced.find(p => p._ri===u._ri));
-  const c = CONTAINERS[containerKey];
-  const containerSummary = _containerPlan.map(({placed}, i) => {
-    const lines = placed.map(item =>
-      `  Collo ${item.colCollo||'?'}: ${item.pl.toFixed(0)}×${item.pw.toFixed(0)}×${item.ph.toFixed(0)}cm @ X${item.px.toFixed(0)}/Y${item.py.toFixed(0)} · ${item.colGrossWeight||'?'}kg`
-    ).join('\n');
-    return `Container ${i+1} (${CONTAINERS[placed[0]?containerKey:containerKey].label}):\n${lines}`;
-  }).join('\n\n');
-  const unplacedLines = totalUnplaced.map(u =>
-    `  Collo ${u.colCollo||'?'}: ${u._l}×${u._w}×${u._h}cm · ${u.colGrossWeight||'?'}kg`
-  ).join('\n');
-
-  const prompt=`Logistiek expert. Beknopt legplan advies (max 200 woorden):\n\nContainertype: ${c.label} (${c.len}×${c.w}×${c.h}cm, ${c.cbm}CBM, ${c.maxKg}kg max)\nAantal containers: ${_containerPlan.length}\nTotaal collo's: ${allPlaced.length} geplaatst van ${units.length}\n\n${containerSummary}${unplacedLines?'\n\nNiet geplaatst:\n'+unplacedLines:''}\n\nFocus: laadvolgorde per container, gewichtsverdeling, aandachtspunten (hijsplan bij >5t, ADR etc.), volgorde van laden. Antwoord in het Nederlands.`;
-
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
-    if(!resp.ok){const eb=await resp.json().catch(()=>({}));throw new Error(`HTTP ${resp.status}: ${eb?.error?.message||resp.statusText}`);}
-    const data=await resp.json();
-    const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
-    if(adviceEl)adviceEl.innerHTML=text.split('\n').filter(l=>l.trim()).map(l=>`<p>${esc(l)}</p>`).join('');
-  }catch(err){if(adviceEl)adviceEl.innerHTML=`<em style="color:var(--ihc-red)">Fout: ${esc(String(err))}</em>`;}
-  btn.disabled=false; btn.textContent='🤖 Container Advies';
+  btn.disabled=false; btn.textContent='📦 Container Advies';
 }
 
 
@@ -272,8 +239,6 @@ async function exportLegplanPDF() {
     // Restore original view
     showContainerView(_activeContainerIdx);
 
-    // AI advice
-    const adviceHTML = document.getElementById('lp-advice-text')?.innerHTML || '';
 
     // Collo table from legplan rows
     const legplanRows = getLegplanRows();
@@ -393,8 +358,6 @@ ${containerSections}
   </table>
 </div>
 
-${adviceHTML ? `<div class="advice-section"><div class="advice-title">🤖 AI Advies</div>${adviceHTML}</div>` : ''}
-
 </body></html>`;
 
     const w = window.open('','_blank');
@@ -407,6 +370,3 @@ ${adviceHTML ? `<div class="advice-section"><div class="advice-title">🤖 AI Ad
   }
   btn.disabled=false; btn.textContent='⬇ PDF Export';
 }
-
-
-
