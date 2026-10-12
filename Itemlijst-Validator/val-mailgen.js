@@ -4,7 +4,7 @@
      • Leverancier  — ontbrekende/afwijkende gegevens (welke regel + kolom)
      • AFS          — voormelding o.b.v. afwijkende afmeting en/of gewicht
    De opgemerkte regels staan aangevinkt; je kunt ze uit-/aanvinken én de
-   tekst vrij aanvullen. Optioneel: AI-verbetering met de Anthropic API-sleutel.
+   tekst vrij aanvullen.
    Zelfstandig: leest globals uit validator.js (_valRows, COL, _valHeaders, esc).
    Raakt de bestaande Expediting Mailer niet aan.
    ────────────────────────────────────────────────────────────────────────── */
@@ -220,13 +220,10 @@ Royal IHC`;
 .valmail-field{display:flex;flex-direction:column;gap:.25rem}
 .valmail-field input,.valmail-field textarea{width:100%;background:var(--navy,#0A1628);border:1px solid var(--steel,#1E3A5F);color:var(--text,#D4DEF0);border-radius:3px;padding:.45rem .6rem;font-family:var(--body,system-ui);font-size:.8rem;outline:none}
 .valmail-field textarea{min-height:230px;font-family:var(--mono,monospace);font-size:.74rem;line-height:1.45;resize:vertical;white-space:pre-wrap}
-.valmail-ai{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
-.valmail-ai input{flex:1;min-width:170px;background:var(--navy,#0A1628);border:1px solid var(--steel,#1E3A5F);color:var(--text,#D4DEF0);border-radius:3px;padding:.35rem .6rem;font-family:var(--mono,monospace);font-size:.7rem}
 .valmail-foot{display:flex;flex-wrap:wrap;gap:.5rem;padding:.8rem 1rem;border-top:1px solid var(--steel,#1E3A5F)}
 .valmail-btn{font-family:var(--mono,monospace);font-size:.74rem;font-weight:700;padding:.45rem .8rem;border:none;border-radius:3px;cursor:pointer}
 .valmail-btn.primary{background:var(--ihc-red,#D91F2C);color:#fff}
 .valmail-btn.ghost{background:none;border:1px solid var(--steel,#1E3A5F);color:var(--text,#D4DEF0)}
-.valmail-btn.ai{background:var(--teal,#00B4C8);color:#04222b}
 .valmail-btn:disabled{opacity:.5;cursor:default}
 .valmail-note{font-size:.68rem;color:var(--muted,#8FA3BF);align-self:center;margin-right:auto}`;
     document.head.appendChild(s);
@@ -253,10 +250,6 @@ Royal IHC`;
           <div class="valmail-field"><span class="valmail-lab">Aan</span><input id="valmail-to" type="text" placeholder="ontvanger@voorbeeld.nl"></div>
           <div class="valmail-field"><span class="valmail-lab">Onderwerp</span><input id="valmail-subj" type="text"></div>
           <div class="valmail-field"><span class="valmail-lab">Bericht (vrij te bewerken)</span><textarea id="valmail-text"></textarea></div>
-          <div class="valmail-ai">
-            <input id="valmail-key" type="password" placeholder="Anthropic API-sleutel (optioneel, voor AI-verbetering)">
-            <button class="valmail-btn ai" id="valmail-aibtn">\uD83E\uDD16 AI: verbeter tekst</button>
-          </div>
         </div>
         <div class="valmail-foot">
           <span class="valmail-note" id="valmail-note"></span>
@@ -271,7 +264,6 @@ Royal IHC`;
       root, tpls: root.querySelector('#valmail-tpls'), list: root.querySelector('#valmail-list'),
       all: root.querySelector('#valmail-all'), to: root.querySelector('#valmail-to'),
       subj: root.querySelector('#valmail-subj'), text: root.querySelector('#valmail-text'),
-      key: root.querySelector('#valmail-key'), aibtn: root.querySelector('#valmail-aibtn'),
       note: root.querySelector('#valmail-note'), regen: root.querySelector('#valmail-regen'),
       copy: root.querySelector('#valmail-copy'), send: root.querySelector('#valmail-send')
     };
@@ -288,7 +280,6 @@ Royal IHC`;
     dom.regen.onclick = regen;
     dom.copy.onclick = doCopy;
     dom.send.onclick = doSend;
-    dom.aibtn.onclick = doAI;
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && dom.root.classList.contains('on')) close(); });
   }
 
@@ -336,32 +327,6 @@ Royal IHC`;
       + '?subject=' + encodeURIComponent(dom.subj.value)
       + '&body=' + encodeURIComponent(dom.text.value);
     window.location.href = url;
-  }
-
-  async function doAI() {
-    const key = (dom.key.value || '').trim();
-    if (!key) { dom.note.textContent = 'Vul een Anthropic API-sleutel in voor AI-verbetering.'; return; }
-    if (!dom.text.value.trim()) { dom.note.textContent = 'Er is nog geen tekst om te verbeteren.'; return; }
-    const old = dom.aibtn.textContent; dom.aibtn.disabled = true; dom.aibtn.textContent = '\u23F3 Bezig\u2026';
-    const prompt =
-      'Herschrijf onderstaande zakelijke e-mail in correct, beleefd en professioneel Nederlands. ' +
-      'Behoud ALLE feiten exact: regelnummers/referenties, kolomnamen, afmetingen, gewichten en e-mailadressen. ' +
-      'Verzin niets bij en laat geen regels weg. Geef UITSLUITEND de definitieve e-mailtekst terug, zonder inleiding of toelichting.\n\n' +
-      '--- E-MAIL ---\n' + dom.text.value;
-    try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
-      });
-      if (!resp.ok) throw new Error('API ' + resp.status);
-      const data = await resp.json();
-      const txt = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-      if (txt) { dom.text.value = txt; dom.note.textContent = '\u2713 Tekst verbeterd met AI'; }
-      else dom.note.textContent = 'Geen tekst ontvangen van de API.';
-    } catch (e) {
-      dom.note.textContent = 'AI-verbetering mislukt: ' + e.message;
-    } finally { dom.aibtn.disabled = false; dom.aibtn.textContent = old; }
   }
 
   /* ---------- open/close ---------- */
