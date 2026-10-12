@@ -81,7 +81,7 @@ body::after {
 .header-h1 .ihc-red { color: var(--ihc-red); }
 
 /* ── LAYOUT ── */
-.main { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 72px); position: relative; z-index: 1; }
+.main { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 72px); position: relative; z-index: 1; }
 
 /* ── SIDEBAR ── */
 .sidebar {
@@ -259,7 +259,7 @@ td.r { text-align: right; }
 ::-webkit-scrollbar-track { background: var(--navy); }
 ::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--teal); }
-@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Shipment tracking (tab "Shipment tracking") — js/tracking.js
@@ -367,3 +367,5 @@ td.r { text-align: right; }
 .cp-empty{padding:1rem;color:var(--muted);font-family:var(--mono)}
 .cp-f select{font-family:var(--mono);font-size:.72rem;padding:.3rem .45rem;background:var(--mid,#0F2040);border:1px solid var(--steel);color:var(--text);border-radius:2px}
 .cipl-panel{min-width:0;max-width:100%}.cp-main,#cp-main{min-width:0;max-width:100%}
+
+.content-panel{min-width:0}
