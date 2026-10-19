@@ -252,7 +252,10 @@ function computeSnapshot(headers, rows, meta){
     po:findCol(headers,cols.po_number),
     pls:findCol(headers,cols.po_line_status), ds:findCol(headers,cols.delivery_status),
     wanted:findCol(headers,cols.latest_wanted_receipt_date), planned:findCol(headers,cols.planned_delivery_date),
-    lastexp:findCol(headers,cols.last_expedited) };
+    lastexp:findCol(headers,cols.last_expedited),
+    // uitsluit-filter: Line No (kolom C), Release No (kolom D), Part No (kolom K)
+    line:findCol(headers,cols.line_no || 'Line No'), rel:findCol(headers,cols.release_no || 'Release No'),
+    part:findCol(headers,cols.part_no || 'Part No') };
   // kolom waarop de 'administratie niet bijgewerkt'-check draait
   C.stale = C[ (rules.stale_date_column === 'latest_wanted_receipt_date') ? 'wanted' : 'planned' ];
   if (C.sp < 0) throw new Error("Kolom 'Sub Project ID' niet gevonden in het bestand.");
@@ -275,6 +278,20 @@ function computeSnapshot(headers, rows, meta){
     warn.push("ExpeditingCore niet geladen — projectfilter (alleen YN/EN) is NIET toegepast op deze upload.");
   }
 
+  // Uitsluiten VOOR de berekening (geldt dus voor elke KPI, per subproject en bedrijfsbreed):
+  //  - Line No én Release No zijn allebei 1 (getal of tekst), OF
+  //  - Part No begint met 'X' (dummy/placeholder-regel).
+  // Eén van beide voorwaarden is voldoende om de regel weg te laten.
+  if (C.line < 0 || C.rel < 0) warn.push("Kolom 'Line No' en/of 'Release No' niet gevonden — filter op Line/Release = 1 is NIET toegepast.");
+  if (C.part < 0) warn.push("Kolom 'Part No' niet gevonden — X-part filter is NIET toegepast.");
+  const isOne = v => { const t = String(v==null?'':v).trim(); return t!=='' && Number(t.replace(',','.'))===1; };
+  const isXPart = v => String(v==null?'':v).trim().toUpperCase().startsWith('X');
+  const uitsluit = r => (C.line>=0 && C.rel>=0 && isOne(r[C.line]) && isOne(r[C.rel])) || (C.part>=0 && isXPart(r[C.part]));
+  const voorFilter = rowsIn.length;
+  rowsIn = rowsIn.filter(r => !uitsluit(r));
+  const nUitgesloten = voorFilter - rowsIn.length;
+  if (nUitgesloten > 0) warn.push(nUitgesloten + " regel(s) uitgesloten van de KPI's (Line No én Release No = 1, of Part No begint met X).");
+
   const groups = {}; const descMap = {};
   for (const r of rowsIn){
     const sp = String((r[C.sp]!==undefined?r[C.sp]:'')||'').trim(); if (!sp) continue;
@@ -290,7 +307,7 @@ function computeSnapshot(headers, rows, meta){
   let date=null; const fn=(meta && meta.filename)||'';
   const m = fn.match(/(\d{2})-(\d{2})-(\d{4})/); if (m) date = m[3]+'-'+m[2]+'-'+m[1];
   if (!date) date = new Date().toISOString().slice(0,10);
-  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rowsIn.length,rowsTotaal:rows.length,warnings:warn}, aggregate, subprojects };
+  return { meetmoment:{label:date,date,filename:fn||'(handmatige upload)',rows:rowsIn.length,rowsTotaal:rows.length,uitgesloten:nUitgesloten,warnings:warn}, aggregate, subprojects };
 }
 
 function setStatus(msg, cls){
@@ -329,7 +346,7 @@ function addMeetmoment(snap){
   const nSub = Object.keys(snap.subprojects).length;
   const warn = (snap.meetmoment.warnings||[]);
   const totaalTxt = (snap.meetmoment.rowsTotaal && snap.meetmoment.rowsTotaal !== snap.meetmoment.rows)
-    ? snap.meetmoment.rows + ' van ' + snap.meetmoment.rowsTotaal + ' regels (YN/EN-projecten)'
+    ? snap.meetmoment.rows + ' van ' + snap.meetmoment.rowsTotaal + ' regels (na YN/EN-projectfilter en uitsluitregels)'
     : snap.meetmoment.rows + ' regels';
   setStatus('✓ Meetmoment ' + snap.meetmoment.label + ' toegevoegd — ' + nSub +
     ' Sub Project ID\'s, ' + totaalTxt + '. Vergeet niet te downloaden en te committen.' +
