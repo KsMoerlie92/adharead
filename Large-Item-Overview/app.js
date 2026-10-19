@@ -133,7 +133,9 @@
     wireTabs(); injectFatStyle();
     $('lio-tbody').addEventListener('change', (e) => {
       const t = e.target; if (!t.classList || !t.classList.contains('lio-in')) return;
-      setFi(t.dataset.k, t.dataset.f, t.value.trim());
+      let v = t.value.trim();
+      if (t.dataset.def !== undefined && v === t.dataset.def) v = '';     // gelijk aan de waarde uit de lijst = geen eigen invoer
+      setFi(t.dataset.k, t.dataset.f, v);
       t.classList.toggle('lio-in-dirty', true); t.classList.remove('lio-in-derived');
     });
     loadFatInfo();
@@ -361,7 +363,7 @@
   // Eigen wijzigingen blijven in de browser (DRAFT) tot je ze opslaat en het
   // gedownloade bestand in de repo zet. Regel-sleutel: PO | System No | Part No.
   const FAT_FILE = 'fat-info.json', DRAFT_LS = 'lio-fat-draft-v1';
-  const FAT_FIELDS = ['protRecv', 'protAppr', 'ihcPres', 'cliPres', 'locAddr'];
+  const FAT_FIELDS = ['protRecv', 'protAppr', 'ihcPres', 'cliReq', 'fatLoc'];
   let COMMITTED = {}, COMMITTED_META = null, DRAFT = {}, INFO_VER = 0;
   try { DRAFT = JSON.parse(localStorage.getItem(DRAFT_LS) || '{}') || {}; } catch (e) { DRAFT = {}; }
   const saveDraft = () => { try { localStorage.setItem(DRAFT_LS, JSON.stringify(DRAFT)); } catch (e) {} };
@@ -445,6 +447,13 @@
       ['', ...opts].map(o => '<option value="' + o + '"' + (o === shown ? ' selected' : '') + '>' + (o === '' ? '—' : o) + '</option>').join('') + '</select>';
   }
   const YN = ['Ja', 'Nee'];
+  // tekstveld: toont de ingevulde waarde, anders de waarde uit de lijst (def). Gelijk aan def = niets opslaan.
+  function txtHtml(r, f, def, w) {
+    const cur = fi(r, f);
+    return '<input type="text" class="lio-in lio-in-txt' + (isDirty(r, f) ? ' lio-in-dirty' : '') + (!cur && def ? ' lio-in-derived' : '') +
+      '" data-k="' + esc(fatKey(r)) + '" data-f="' + f + '" data-def="' + esc(def) + '" value="' + esc(cur || def) + '"' + (w ? ' style="min-width:' + w + 'px"' : '') + '>';
+  }
+  const clientReq = (r) => fi(r, 'cliReq');
 
   // ── BETA: kritiekheid = gewicht + FAT + additional requirements ──────────
   // Per aanwezige factor punten (requirements weegt het zwaarst, de drie liggen dicht
@@ -545,8 +554,10 @@
       { h: 'PO Number',        k: 'po',     f: r => flat(val(r, 'orderNo')) },
       { h: 'Name',             k: 'name',   f: r => flat(val(r, 'refDesc')) },
       { h: 'Leverancier',      k: 'sup',    f: r => flat(val(r, 'supplier')) },
-      { h: 'FAT Location',     k: 'floc',   f: r => flat(val(r, 'fatLoc')) },
-      { h: 'Client Required',  k: 'creq',   f: () => '', title: 'Nog geen bronkolom in de bedrijfsbrede lijst (Customer Attendance ID)' },
+      { h: 'FAT Location',     k: 'floc',   f: r => fi(r, 'fatLoc') || flat(val(r, 'fatLoc')), edit: true,
+        html: r => txtHtml(r, 'fatLoc', flat(val(r, 'fatLoc')), 160), title: 'Locatie/adres van de FAT — uit de lijst, hier aan te passen' },
+      { h: 'Client Required',  k: 'creq',   f: clientReq, edit: true, cls: r => clientReq(r) ? 'lio-ok' : '', html: r => selHtml(r, 'cliReq', ['X']),
+        title: 'Handmatig: X = klant aanwezig / client required' },
       { h: 'Expected FAT Date', k: 'fdate', f: r => fmtDate(val(r, 'fatDate')), d: r => toDate(val(r, 'fatDate')),
         cls: r => { const d = toDate(val(r, 'fatDate')); if (!d) return '';
           const x = Math.round((d - startOfToday()) / 86400000);
@@ -557,16 +568,11 @@
       { h: 'Protocol goedgekeurd', k: 'protAppr', f: protApprEff, edit: true, cls: r => protApprEff(r) === 'Ja' ? 'lio-ok' : '',
         html: r => selHtml(r, 'protAppr', YN, toDate(val(r, 'protoDate')) ? 'Ja' : ''),
         title: 'Handmatige keuze wint; leeg = afgeleid uit FAT Supplier Protocol Date (grijs)' },
-      { h: 'Aanwezig IHC',     k: 'ihcPres', f: r => fi(r, 'ihcPres'), edit: true, html: r => selHtml(r, 'ihcPres', YN) },
-      { h: 'Aanwezig klant',   k: 'cliPres', f: r => fi(r, 'cliPres'), edit: true, html: r => selHtml(r, 'cliPres', YN) },
-      { h: 'Locatie / adres',  k: 'locAddr', f: r => fi(r, 'locAddr') || flat(val(r, 'fatLoc')), edit: true,
-        html: r => '<input type="text" class="lio-in lio-in-txt' + (isDirty(r, 'locAddr') ? ' lio-in-dirty' : '') + '" data-k="' + esc(fatKey(r)) + '" data-f="locAddr" value="' +
-          esc(fi(r, 'locAddr')) + '" placeholder="' + esc(flat(val(r, 'fatLoc'))) + '">',
-        title: 'Handmatig adres van de FAT-locatie; leeg = FAT Location uit de lijst (placeholder)' },
-      { h: 'Client invite before', k: 'inv', f: r => fmtDate(addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS)),
-        d: r => addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS), cls: () => 'lio-dim',
-        title: 'FAT-datum − 14 dagen. Zolang Customer Attendance ID ontbreekt, wordt dit voor élke regel getoond.' },
-      { h: 'Responsible Name', k: 'resp',   f: r => flat(val(r, 'engineer')) },
+      { h: 'Aanwezig IHC',     k: 'ihcPres', f: r => fi(r, 'ihcPres') || flat(val(r, 'engineer')), edit: true,
+        html: r => txtHtml(r, 'ihcPres', flat(val(r, 'engineer')), 130), title: 'Wie van IHC aanwezig is — standaard de Technical Coordinator (Responsible Name)' },
+      { h: 'Client invite before', k: 'inv', f: r => clientReq(r) ? fmtDate(addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS)) : '',
+        d: r => clientReq(r) ? addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS) : null, cls: () => 'lio-dim',
+        title: 'FAT-datum − 14 dagen; alleen bij Client Required = X' },
       { h: 'Planned Delivery Date (exw)', k: 'pdd', f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')),
         cls: r => leadOf(r).key === 'short' || leadOf(r).key === 'long' ? 'lio-bad' : '' },
       { h: 'Remarks',          k: 'rem',    f: r => leadOf(r).label,
