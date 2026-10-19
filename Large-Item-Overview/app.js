@@ -130,7 +130,13 @@
 
   // ── data laden ───────────────────────────────────────────────────────────
   async function boot() {
-    wireTabs();
+    wireTabs(); injectFatStyle();
+    $('lio-tbody').addEventListener('change', (e) => {
+      const t = e.target; if (!t.classList || !t.classList.contains('lio-in')) return;
+      setFi(t.dataset.k, t.dataset.f, t.value.trim());
+      t.classList.toggle('lio-in-dirty', true); t.classList.remove('lio-in-derived');
+    });
+    loadFatInfo();
     $('lio-upload').addEventListener('click', () => $('lio-file').click());
     $('lio-file').addEventListener('change', onUpload);
     try {
@@ -193,6 +199,20 @@
     $('lio-src-txt').innerHTML = '📊 Bron: <b>' + esc(srcLabel) + '</b> — ' +
       rows.length.toLocaleString('nl-NL') + ' regels, ' + headers.length + ' kolommen';
     renderWarnings(); buildSubProjectPanel(); render();
+  }
+
+  function injectFatStyle() {
+    if (document.getElementById('lio-fat-style')) return;
+    const st = document.createElement('style'); st.id = 'lio-fat-style';
+    st.textContent =
+      '.lio-in{font-family:inherit;font-size:.74rem;background:var(--navy,#0A1628);color:var(--white,#F0F4FA);border:1px solid var(--steel,#1e3a6e);border-radius:4px;padding:.2rem .3rem;max-width:100%}' +
+      '.lio-in-txt{min-width:170px}' +
+      '.lio-in:focus{outline:none;border-color:var(--teal,#00B4D8)}' +
+      '.lio-in-dirty{border-color:#E8B923;box-shadow:0 0 0 1px rgba(232,185,35,.5)}' +
+      '.lio-in-derived{color:var(--grey,#8FA3BF);font-style:italic}' +
+      '.lio-fat-status{margin-left:.6rem;font-size:.72rem;color:var(--grey,#8FA3BF)}' +
+      '.lio-fat-dirty{color:#E8B923;font-weight:700}';
+    document.head.appendChild(st);
   }
 
   function renderWarnings() {
@@ -336,6 +356,96 @@
   // Protocol goedgekeurd = er staat een datum in AG
   const protoOk = (r) => toDate(val(r, 'protoDate')) ? 'Y' : '';
 
+  // ── FAT-invulling (handmatig aan te vullen, gedeeld via fat-info.json) ──────
+  // Gedeelde waarden staan in fat-info.json naast deze pagina (in de repo).
+  // Eigen wijzigingen blijven in de browser (DRAFT) tot je ze opslaat en het
+  // gedownloade bestand in de repo zet. Regel-sleutel: PO | System No | Part No.
+  const FAT_FILE = 'fat-info.json', DRAFT_LS = 'lio-fat-draft-v1';
+  const FAT_FIELDS = ['protRecv', 'protAppr', 'ihcPres', 'cliPres', 'locAddr'];
+  let COMMITTED = {}, COMMITTED_META = null, DRAFT = {}, INFO_VER = 0;
+  try { DRAFT = JSON.parse(localStorage.getItem(DRAFT_LS) || '{}') || {}; } catch (e) { DRAFT = {}; }
+  const saveDraft = () => { try { localStorage.setItem(DRAFT_LS, JSON.stringify(DRAFT)); } catch (e) {} };
+  const fatKey = (r) => [trim(val(r, 'orderNo')), flat(val(r, 'sysNo')), trim(val(r, 'part'))].join('|');
+  function fi(r, f) {
+    const k = fatKey(r);
+    if (DRAFT[k] && f in DRAFT[k]) return DRAFT[k][f];
+    return (COMMITTED[k] && COMMITTED[k][f]) || '';
+  }
+  const isDirty = (r, f) => { const k = fatKey(r); return !!(DRAFT[k] && f in DRAFT[k] && DRAFT[k][f] !== ((COMMITTED[k] && COMMITTED[k][f]) || '')); };
+  function setFi(k, f, v) {
+    const base = (COMMITTED[k] && COMMITTED[k][f]) || '';
+    if (v === base) { if (DRAFT[k]) { delete DRAFT[k][f]; if (!Object.keys(DRAFT[k]).length) delete DRAFT[k]; } }
+    else { (DRAFT[k] = DRAFT[k] || {})[f] = v; }
+    INFO_VER++; saveDraft(); updateFatStatus();
+  }
+  const dirtyCount = () => Object.keys(DRAFT).reduce((n, k) => n + Object.keys(DRAFT[k]).length, 0);
+  function updateFatStatus() {
+    const el = $('lio-fat-status'); if (!el) return;
+    const n = dirtyCount();
+    el.textContent = n ? n + ' wijziging(en) nog niet gedeeld — sla op en zet fat-info.json in de repo' :
+      (COMMITTED_META && COMMITTED_META.saved ? 'Gedeelde gegevens van ' + fmtDate(COMMITTED_META.saved) : 'Geen gedeelde gegevens geladen');
+    el.className = 'lio-fat-status' + (n ? ' lio-fat-dirty' : '');
+  }
+  async function loadFatInfo() {
+    try {
+      const resp = await fetch(FAT_FILE + '?v=' + Date.now(), { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const obj = await resp.json();
+      COMMITTED = (obj && obj.items) || {}; COMMITTED_META = (obj && obj.meta) || null;
+      // eigen wijzigingen die inmiddels gelijk zijn aan de gedeelde waarde opruimen
+      for (const k of Object.keys(DRAFT)) { for (const f of Object.keys(DRAFT[k])) {
+        if (DRAFT[k][f] === ((COMMITTED[k] && COMMITTED[k][f]) || '')) delete DRAFT[k][f]; }
+        if (!Object.keys(DRAFT[k]).length) delete DRAFT[k]; }
+      saveDraft();
+    } catch (e) { COMMITTED = {}; COMMITTED_META = null; }   // nog geen bestand = normaal
+    INFO_VER++; updateFatStatus(); if (TAB === 'fat' || TAB === 'beta') render();
+  }
+  function effectiveInfo() {
+    const out = {}; const keys = new Set([...Object.keys(COMMITTED), ...Object.keys(DRAFT)]);
+    for (const k of keys) {
+      const o = {}; for (const f of FAT_FIELDS) {
+        const v = (DRAFT[k] && f in DRAFT[k]) ? DRAFT[k][f] : ((COMMITTED[k] && COMMITTED[k][f]) || '');
+        if (v) o[f] = v; }
+      if (Object.keys(o).length) out[k] = o;
+    }
+    return out;
+  }
+  function downloadFatInfo() {
+    const payload = { meta: { saved: new Date().toISOString(), version: 1,
+        note: 'Handmatig aangevulde FAT-gegevens (Large Item Overview). Zet dit bestand als fat-info.json naast index.html.' },
+      items: effectiveInfo() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = FAT_FILE; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const el = $('lio-fat-status');
+    if (el) { el.textContent = FAT_FILE + ' gedownload (' + Object.keys(payload.items).length + ' regels) — zet het in de repo naast index.html en commit het.'; el.className = 'lio-fat-status'; }
+  }
+  function importFatInfo(file) {
+    const rd = new FileReader();
+    rd.onload = () => { try {
+      const obj = JSON.parse(rd.result); const items = (obj && obj.items) || {};
+      for (const k of Object.keys(items)) for (const f of FAT_FIELDS) {
+        if (f in items[k]) { const v = items[k][f] || ''; const base = (COMMITTED[k] && COMMITTED[k][f]) || '';
+          if (v !== base) (DRAFT[k] = DRAFT[k] || {})[f] = v; } }
+      INFO_VER++; saveDraft(); render();
+    } catch (e) { alert('Kon ' + file.name + ' niet lezen: ' + e.message); } };
+    rd.readAsText(file);
+  }
+  function resetDraft() {
+    if (!dirtyCount() || !confirm('Alle eigen, nog niet gedeelde wijzigingen wissen?')) return;
+    DRAFT = {}; saveDraft(); INFO_VER++; render();
+  }
+  // protocol goedgekeurd: handmatige keuze wint; anders afgeleid uit FAT Supplier Protocol Date
+  const protApprEff = (r) => fi(r, 'protAppr') || (toDate(val(r, 'protoDate')) ? 'Ja' : '');
+  function selHtml(r, f, opts, derived) {
+    const cur = fi(r, f), shown = cur || derived || '';
+    const dirty = isDirty(r, f) ? ' lio-in-dirty' : '', dim = (!cur && derived) ? ' lio-in-derived' : '';
+    return '<select class="lio-in' + dirty + dim + '" data-k="' + esc(fatKey(r)) + '" data-f="' + f + '">' +
+      ['', ...opts].map(o => '<option value="' + o + '"' + (o === shown ? ' selected' : '') + '>' + (o === '' ? '—' : o) + '</option>').join('') + '</select>';
+  }
+  const YN = ['Ja', 'Nee'];
+
   // ── BETA: kritiekheid = gewicht + FAT + additional requirements ──────────
   // Per aanwezige factor punten (requirements weegt het zwaarst, de drie liggen dicht
   // bij elkaar). 2 van de 3 factoren krijgt een bonus, 3 van de 3 een grotere bonus.
@@ -357,7 +467,7 @@
   }
   const _betaMemo = new WeakMap();
   function betaOf(r) {
-    if (_betaMemo.has(r) && _betaMemo.get(r).thr === THRESHOLD) return _betaMemo.get(r);
+    if (_betaMemo.has(r) && _betaMemo.get(r).thr === THRESHOLD && _betaMemo.get(r).ver === INFO_VER) return _betaMemo.get(r);
     const w = num(val(r, 'totW')), n = reqCount(r);
     const fd = toDate(val(r, 'fatDate')), hasFat = !!(fd || trim(val(r, 'fatLoc')));
     const hasW = w != null && w >= THRESHOLD, hasR = n > 0;
@@ -370,14 +480,14 @@
     }
     if (hasFat) {
       let i = 0.6;
-      if (!toDate(val(r, 'protoDate'))) i += 0.2;                                  // protocol nog niet goedgekeurd
+      if (protApprEff(r) !== 'Ja') i += 0.2;                                       // protocol nog niet goedgekeurd
       if (fd && Math.round((fd - startOfToday()) / 86400000) <= BETA.fatSoonDays) i += 0.2;   // FAT dichtbij / verstreken
       pts += BETA.pts.fat * i; f.push('FAT');
     }
     const cnt = f.length;
     const score = cnt ? Math.round(pts + BETA.bonus[cnt]) : 0;
     const level = !cnt ? 'none' : score >= BETA.red ? 'red' : score >= BETA.orange ? 'orange' : 'green';
-    const out = { score, level, cnt, factors: f, n, w, thr: THRESHOLD };
+    const out = { score, level, cnt, factors: f, n, w, thr: THRESHOLD, ver: INFO_VER };
     _betaMemo.set(r, out); return out;
   }
   const LEVEL = { red: ['Rood', 'lio-bad'], orange: ['Oranje', 'lio-warn-c'], green: ['Groen', 'lio-ok'], none: ['', ''] };
@@ -426,7 +536,7 @@
       { h: 'FAT date',     k: 'fdate', f: r => fmtDate(val(r, 'fatDate')), d: r => toDate(val(r, 'fatDate')),
         cls: r => { const d = toDate(val(r, 'fatDate')); if (!d) return '';
           const x = Math.round((d - startOfToday()) / 86400000); return x < 0 ? 'lio-bad' : x <= 30 ? 'lio-warn-c' : ''; } },
-      { h: 'Protocol',     k: 'proto', f: protoOk, cls: r => protoOk(r) ? 'lio-ok' : '' },
+      { h: 'Protocol',     k: 'proto', f: r => protApprEff(r) === 'Ja' ? 'Y' : '', cls: r => protApprEff(r) === 'Ja' ? 'lio-ok' : '' },
       { h: 'Planned',      k: 'pdd',  f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')) },
       ...COMMON_TAIL,
     ],
@@ -434,7 +544,6 @@
       { h: 'System No',        k: 'sysNo',  f: r => flat(val(r, 'sysNo')) },
       { h: 'PO Number',        k: 'po',     f: r => flat(val(r, 'orderNo')) },
       { h: 'Name',             k: 'name',   f: r => flat(val(r, 'refDesc')) },
-      { h: 'FAT',              k: 'fatT',   f: () => 'FAT' },
       { h: 'Leverancier',      k: 'sup',    f: r => flat(val(r, 'supplier')) },
       { h: 'FAT Location',     k: 'floc',   f: r => flat(val(r, 'fatLoc')) },
       { h: 'Client Required',  k: 'creq',   f: () => '', title: 'Nog geen bronkolom in de bedrijfsbrede lijst (Customer Attendance ID)' },
@@ -442,13 +551,22 @@
         cls: r => { const d = toDate(val(r, 'fatDate')); if (!d) return '';
           const x = Math.round((d - startOfToday()) / 86400000);
           return x < 0 ? 'lio-bad' : x <= 30 ? 'lio-warn-c' : ''; } },
+      // ── handmatig in te vullen (opslaan in fat-info.json) ──
+      { h: 'Protocol ontvangen?',  k: 'protRecv', f: r => fi(r, 'protRecv'), edit: true, cls: r => fi(r, 'protRecv') === 'Ja' ? 'lio-ok' : '',
+        html: r => selHtml(r, 'protRecv', YN), title: 'Handmatig — is het FAT-protocol ontvangen?' },
+      { h: 'Protocol goedgekeurd', k: 'protAppr', f: protApprEff, edit: true, cls: r => protApprEff(r) === 'Ja' ? 'lio-ok' : '',
+        html: r => selHtml(r, 'protAppr', YN, toDate(val(r, 'protoDate')) ? 'Ja' : ''),
+        title: 'Handmatige keuze wint; leeg = afgeleid uit FAT Supplier Protocol Date (grijs)' },
+      { h: 'Aanwezig IHC',     k: 'ihcPres', f: r => fi(r, 'ihcPres'), edit: true, html: r => selHtml(r, 'ihcPres', YN) },
+      { h: 'Aanwezig klant',   k: 'cliPres', f: r => fi(r, 'cliPres'), edit: true, html: r => selHtml(r, 'cliPres', YN) },
+      { h: 'Locatie / adres',  k: 'locAddr', f: r => fi(r, 'locAddr') || flat(val(r, 'fatLoc')), edit: true,
+        html: r => '<input type="text" class="lio-in lio-in-txt' + (isDirty(r, 'locAddr') ? ' lio-in-dirty' : '') + '" data-k="' + esc(fatKey(r)) + '" data-f="locAddr" value="' +
+          esc(fi(r, 'locAddr')) + '" placeholder="' + esc(flat(val(r, 'fatLoc'))) + '">',
+        title: 'Handmatig adres van de FAT-locatie; leeg = FAT Location uit de lijst (placeholder)' },
       { h: 'Client invite before', k: 'inv', f: r => fmtDate(addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS)),
         d: r => addDays(toDate(val(r, 'fatDate')), -INVITE_DAYS), cls: () => 'lio-dim',
         title: 'FAT-datum − 14 dagen. Zolang Customer Attendance ID ontbreekt, wordt dit voor élke regel getoond.' },
-      { h: 'Protocol goedgekeurd', k: 'proto', f: protoOk,
-        cls: r => protoOk(r) ? 'lio-ok' : '', title: 'Y zodra FAT Supplier Protocol Date (AG) een datum bevat' },
       { h: 'Responsible Name', k: 'resp',   f: r => flat(val(r, 'engineer')) },
-      { h: 'Aanwezig klant',   k: 'cAtt',   f: () => '', title: 'Nog geen bronkolom in de bedrijfsbrede lijst (Customer Attendance ID)' },
       { h: 'Planned Delivery Date (exw)', k: 'pdd', f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')),
         cls: r => leadOf(r).key === 'short' || leadOf(r).key === 'long' ? 'lio-bad' : '' },
       { h: 'Remarks',          k: 'rem',    f: r => leadOf(r).label,
@@ -528,6 +646,7 @@
       ? rows.map(r => '<tr>' + defs.map(d => {
           const cls = [d.num ? 'lio-num' : '', d.cls ? d.cls(r) : ''].filter(Boolean).join(' ');
           const v = d.f(r);
+          if (d.html) return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + d.html(r) + '</td>';
           return '<td' + (cls ? ' class="' + cls + '"' : '') + (v ? ' title="' + esc(v) + '"' : '') +
                  '>' + esc(v) + '</td>';
         }).join('') + '</tr>').join('')
@@ -538,7 +657,20 @@
     const el = $('lio-tools');
     el.innerHTML = (TAB === 'large' || TAB === 'beta')
       ? '<label class="lio-thr">Vanaf <input type="number" id="lio-threshold" value="' + THRESHOLD +
-        '" min="0" step="100"> kg totaalgewicht</label>' : '';
+        '" min="0" step="100"> kg totaalgewicht</label>'
+      : TAB === 'fat'
+      ? '<button class="btn-val" id="lio-fat-save" type="button">💾 Opslaan (fat-info.json)</button> ' +
+        '<button class="btn-val" id="lio-fat-load" type="button">📂 Laden…</button> ' +
+        '<button class="btn-val" id="lio-fat-reset" type="button">↺ Eigen wijzigingen wissen</button> ' +
+        '<input type="file" id="lio-fat-file" accept=".json,application/json" style="display:none">' +
+        '<span class="lio-fat-status" id="lio-fat-status"></span>' : '';
+    if (TAB === 'fat') {
+      $('lio-fat-save').addEventListener('click', downloadFatInfo);
+      $('lio-fat-load').addEventListener('click', () => $('lio-fat-file').click());
+      $('lio-fat-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) importFatInfo(f); });
+      $('lio-fat-reset').addEventListener('click', resetDraft);
+      updateFatStatus();
+    }
     const inp = $('lio-threshold');
     if (inp) inp.addEventListener('change', () => {
       const v = parseFloat(inp.value); THRESHOLD = isNaN(v) ? 0 : v; render();
