@@ -39,13 +39,17 @@
     netW:      [['Net Weight'], 'AO'],
     totW:      [['Total Net Weight'], 'AP'],
     wUoM:      [['Weight UoM'], 'AQ'],
+    // BETA-tab: aantal additional requirements. Optioneel (geen waarschuwing als hij ontbreekt).
+    addReq:    [['Additional Requirements', 'Additional Requirement', 'Additional requirements'], 'AG'],
   };
+  const OPTIONAL = new Set(['addReq']);
   // Kolommen zónder welke een tabblad zinloos is. Overige kolommen mogen
   // ontbreken: die blijven leeg, met een melding erboven.
   const NEEDED = {
     large: ['totW'],
     late:  ['delStatus'],
     fat:   ['fatDate'],
+    beta:  ['totW'],
   };
 
   let HEADERS = [], ROWS = [], C = {}, MISSING = [];
@@ -67,7 +71,7 @@
       const names = MAP[key][0];
       let i = -1;
       for (const n of names) { i = low.indexOf(n.toLowerCase()); if (i >= 0) break; }
-      if (i < 0) missing.push(names[0]);
+      if (i < 0 && !OPTIONAL.has(key)) missing.push(names[0]);
       cols[key] = i;
     }
     return { cols, missing };
@@ -296,6 +300,7 @@
     if (tab === 'late') {
       return base.filter(r => trim(val(r, 'delStatus')).toLowerCase() === 'late');
     }
+    if (tab === 'beta') return base.filter(r => betaOf(r).cnt > 0);
     return base.filter(r => trim(val(r, 'fatDate')) || trim(val(r, 'fatLoc')));
   }
   function delay(r) {
@@ -330,6 +335,52 @@
   // Protocol goedgekeurd = er staat een datum in AG
   const protoOk = (r) => toDate(val(r, 'protoDate')) ? 'Y' : '';
 
+  // ── BETA: kritiekheid = gewicht + FAT + additional requirements ──────────
+  // Per aanwezige factor punten (requirements weegt het zwaarst, de drie liggen dicht
+  // bij elkaar). 2 van de 3 factoren krijgt een bonus, 3 van de 3 een grotere bonus.
+  // Daarna: score >= RED rood, >= ORANGE oranje, anders groen.
+  const BETA = {
+    pts:   { req: 35, weight: 33, fat: 32 },
+    bonus: { 1: 0, 2: 8, 3: 20 },
+    red: 70, orange: 40,
+    weightFull: 10000,          // kg waarbij de gewichtsfactor volledig meetelt
+    fatSoonDays: 30,            // FAT binnen zoveel dagen (of verstreken) = urgent
+  };
+  const NONE_TXT = new Set(['', '0', '-', '--', 'none', 'nvt', 'n/a', 'na', 'geen', 'no', 'nee']);
+  function reqCount(r) {
+    const v = val(r, 'addReq');
+    if (typeof v === 'number') return isFinite(v) && v > 0 ? Math.round(v) : 0;
+    const t = trim(v); if (NONE_TXT.has(t.toLowerCase())) return 0;
+    if (/^\d+$/.test(t)) return parseInt(t, 10);
+    return t.split(/[\r\n;|]+/).map(x => x.trim()).filter(x => x && !NONE_TXT.has(x.toLowerCase())).length;
+  }
+  const _betaMemo = new WeakMap();
+  function betaOf(r) {
+    if (_betaMemo.has(r) && _betaMemo.get(r).thr === THRESHOLD) return _betaMemo.get(r);
+    const w = num(val(r, 'totW')), n = reqCount(r);
+    const fd = toDate(val(r, 'fatDate')), hasFat = !!(fd || trim(val(r, 'fatLoc')));
+    const hasW = w != null && w >= THRESHOLD, hasR = n > 0;
+    const f = [];
+    let pts = 0;
+    if (hasR) { pts += BETA.pts.req * (n >= 3 ? 1 : n === 2 ? 0.8 : 0.6); f.push('Req ' + n); }
+    if (hasW) {
+      const span = Math.max(1, BETA.weightFull - THRESHOLD);
+      pts += BETA.pts.weight * (0.6 + 0.4 * Math.min(1, (w - THRESHOLD) / span)); f.push('Gewicht');
+    }
+    if (hasFat) {
+      let i = 0.6;
+      if (!toDate(val(r, 'protoDate'))) i += 0.2;                                  // protocol nog niet goedgekeurd
+      if (fd && Math.round((fd - startOfToday()) / 86400000) <= BETA.fatSoonDays) i += 0.2;   // FAT dichtbij / verstreken
+      pts += BETA.pts.fat * i; f.push('FAT');
+    }
+    const cnt = f.length;
+    const score = cnt ? Math.round(pts + BETA.bonus[cnt]) : 0;
+    const level = !cnt ? 'none' : score >= BETA.red ? 'red' : score >= BETA.orange ? 'orange' : 'green';
+    const out = { score, level, cnt, factors: f, n, w, thr: THRESHOLD };
+    _betaMemo.set(r, out); return out;
+  }
+  const LEVEL = { red: ['Rood', 'lio-bad'], orange: ['Oranje', 'lio-warn-c'], green: ['Groen', 'lio-ok'], none: ['', ''] };
+
   const DEFS = {
     large: [
       { h: 'PO No',        k: 'po',   f: r => trim(val(r, 'po')) },
@@ -356,6 +407,26 @@
       { h: 'Dagen te laat', k: 'off', f: r => { const d = delay(r); return d == null ? '' : String(d); },
         num: true, n: r => delay(r),
         cls: r => { const d = delay(r); return d > 30 ? 'lio-bad' : d > 0 ? 'lio-warn-c' : ''; } },
+      ...COMMON_TAIL,
+    ],
+    beta: [
+      { h: 'Score',        k: 'bscore', f: r => String(betaOf(r).score), num: true, n: r => betaOf(r).score,
+        cls: r => LEVEL[betaOf(r).level][1] + ' lio-strong', title: 'Kritiekheidsscore (0-100+): gewicht + FAT + additional requirements' },
+      { h: 'Risico',       k: 'blevel', f: r => LEVEL[betaOf(r).level][0], n: r => betaOf(r).score,
+        cls: r => LEVEL[betaOf(r).level][1] },
+      { h: 'Factoren',     k: 'bfac',  f: r => betaOf(r).factors.join(' · ') + ' (' + betaOf(r).cnt + '/3)', n: r => betaOf(r).cnt * 1000 + betaOf(r).score },
+      { h: 'PO No',        k: 'po',   f: r => trim(val(r, 'po')) },
+      { h: 'Sub Project',  k: 'sp',   f: r => trim(val(r, 'sp')) },
+      { h: 'Supplier',     k: 'sup',  f: r => flat(val(r, 'supplier')) },
+      { h: 'Part No',      k: 'part', f: r => trim(val(r, 'part')) },
+      { h: 'Omschrijving', k: 'desc', f: r => flat(val(r, 'desc')) },
+      { h: 'Totaal gewicht', k: 'totW', f: r => fmtNum(num(val(r, 'totW'))), num: true, n: r => num(val(r, 'totW')) },
+      { h: 'Add. req.',    k: 'breq', f: r => { const n = reqCount(r); return n ? String(n) : ''; }, num: true, n: r => reqCount(r) },
+      { h: 'FAT date',     k: 'fdate', f: r => fmtDate(val(r, 'fatDate')), d: r => toDate(val(r, 'fatDate')),
+        cls: r => { const d = toDate(val(r, 'fatDate')); if (!d) return '';
+          const x = Math.round((d - startOfToday()) / 86400000); return x < 0 ? 'lio-bad' : x <= 30 ? 'lio-warn-c' : ''; } },
+      { h: 'Protocol',     k: 'proto', f: protoOk, cls: r => protoOk(r) ? 'lio-ok' : '' },
+      { h: 'Planned',      k: 'pdd',  f: r => fmtDate(val(r, 'planned')), d: r => toDate(val(r, 'planned')) },
       ...COMMON_TAIL,
     ],
     fat: [
@@ -388,7 +459,7 @@
   };
 
   // ── sorteren (zelfde gedrag als Late Items in de PO-Matcher) ─────────────
-  const SORT = { large: { col: 'totW', dir: 'desc' }, late: { col: 'off', dir: 'desc' }, fat: { col: 'fdate', dir: 'asc' } };
+  const SORT = { beta: { col: 'bscore', dir: 'desc' }, large: { col: 'totW', dir: 'desc' }, late: { col: 'off', dir: 'desc' }, fat: { col: 'fdate', dir: 'asc' } };
   window.lioSort = function (key) {
     const s = SORT[TAB];
     if (s.col === key) s.dir = (s.dir === 'asc') ? 'desc' : 'asc';
@@ -464,7 +535,7 @@
 
   function renderTools() {
     const el = $('lio-tools');
-    el.innerHTML = TAB === 'large'
+    el.innerHTML = (TAB === 'large' || TAB === 'beta')
       ? '<label class="lio-thr">Vanaf <input type="number" id="lio-threshold" value="' + THRESHOLD +
         '" min="0" step="100"> kg totaalgewicht</label>' : '';
     const inp = $('lio-threshold');
@@ -478,6 +549,16 @@
       const tot = rows.reduce((s, r) => s + (num(val(r, 'totW')) || 0), 0);
       return '<b>' + rows.length + '</b> large items (≥ ' + fmtNum(THRESHOLD) + ' kg) · ' +
         'totaal <b>' + fmtNum(tot) + '</b> kg';
+    }
+    if (tab === 'beta') {
+      const c = { red: 0, orange: 0, green: 0 }; rows.forEach(r => c[betaOf(r).level]++);
+      const c3 = rows.filter(r => betaOf(r).cnt === 3).length;
+      return '<b>' + rows.length + '</b> items met minimaal 1 factor · ' +
+        '<span class="lio-bad-txt"><b>' + c.red + '</b> rood</span> · <b>' + c.orange + '</b> oranje · <b>' + c.green + '</b> groen · ' +
+        '<b>' + c3 + '</b> met alle 3 factoren' +
+        (C.addReq < 0 ? ' <br><span class="lio-bad-txt">⚠ Kolom "Additional Requirements" zit niet in de geladen lijst — requirements tellen nu als 0.</span>' : '') +
+        '<br><span class="lio-dim">Factoren: gewicht ≥ ' + fmtNum(THRESHOLD) + ' kg · FAT aanwezig · ≥ 1 additional requirement. ' +
+        'Requirements wegen het zwaarst; 2 van de 3 weegt minder dan 3 van de 3.</span>';
     }
     if (tab === 'late') {
       const d = rows.map(delay).filter(x => x != null && x > 0);
