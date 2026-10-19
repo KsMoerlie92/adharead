@@ -71,6 +71,7 @@
       const names = MAP[key][0];
       let i = -1;
       for (const n of names) { i = low.indexOf(n.toLowerCase()); if (i >= 0) break; }
+      if (i < 0 && key === 'addReq') i = low.findIndex(h => /additional\s*req/.test(h));   // ruimere herkenning
       if (i < 0 && !OPTIONAL.has(key)) missing.push(names[0]);
       cols[key] = i;
     }
