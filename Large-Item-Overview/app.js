@@ -143,6 +143,15 @@
       refreshRow(t.closest('tr'));
       if ($('lio-ifs-in') && $('lio-ifs-in').value) runIfs();
     });
+    $('lio-tbody').addEventListener('click', async (e) => {
+      const eb = e.target.closest && e.target.closest('button.lio-exp'); if (eb) { toggleDoc(eb); return; }
+      const a = e.target.closest && e.target.closest('a.lio-ifs-x'); if (!a) return;
+      e.preventDefault();
+      const r = FATBY[a.closest('tr').dataset.k]; if (!r) return;
+      const w = window.open('', '_blank');                         // direct openen (anders blokkeert de browser de pop-up)
+      try { const url = await ifsKeysUrl(ifsScopeKeys(a.dataset.scope, r)); if (w) w.location.href = url; else window.location.href = url; }
+      catch (err) { if (w) w.close(); alert(err.message); }
+    });
     loadFatInfo(); loadFatList();
     $('lio-upload').addEventListener('click', () => $('lio-file').click());
     $('lio-file').addEventListener('change', onUpload);
@@ -219,6 +228,16 @@
       '.lio-in-derived{color:var(--grey,#8FA3BF);font-style:italic}' +
       '.lio-fat-status{margin-left:.6rem;font-size:.72rem;color:var(--grey,#8FA3BF)}' +
       '.lio-fat-dirty{color:#E8B923;font-weight:700}' +
+      '.lio-exp{background:none;border:1px solid var(--steel,#1e3a6e);border-radius:5px;color:var(--teal,#00B4D8);cursor:pointer;width:1.6rem;height:1.5rem;font-size:.8rem;transition:transform .2s}' +
+      '.lio-exp.lio-open{transform:rotate(90deg)}' +
+      '.lio-detail>td{background:var(--mid,#0F2040);padding:0 !important;white-space:normal !important}' +
+      '.lio-slide{overflow:hidden;transition:max-height .25s ease}.lio-slide-in{padding:.7rem 1rem}' +
+      '.lio-doc-head{font-size:.85rem;margin-bottom:.3rem}.lio-doc-sum{font-size:.78rem;margin:.2rem 0 .4rem}' +
+      '.lio-chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.5rem}' +
+      '.lio-chip{background:var(--navy,#0A1628);border:1px solid var(--steel,#1e3a6e);border-radius:10px;padding:.1rem .55rem;font-size:.7rem}' +
+      '.lio-doc-grp{font-size:.74rem;color:var(--grey,#8FA3BF);margin:.5rem 0 .2rem;font-weight:700}' +
+      '.lio-doc{border-collapse:collapse;width:100%;max-width:1200px;font-size:.72rem;margin-bottom:.4rem}.lio-doc th{text-align:left;color:var(--grey,#8FA3BF);font-weight:600;padding:.2rem .5rem;border-bottom:1px solid var(--steel,#1e3a6e)}' +
+      '.lio-doc td{padding:.2rem .5rem;border-bottom:1px solid rgba(30,58,110,.5)}' +
       '.lio-cb{width:auto;accent-color:#00B4D8}.lio-in[type=date]{min-width:120px}' +
       '.lio-ifs{margin:.6rem 0;border:1px solid var(--steel,#1e3a6e);border-radius:8px;background:var(--mid,#0F2040);padding:.4rem .8rem}' +
       '.lio-ifs summary{cursor:pointer;font-weight:700;font-size:.8rem}.lio-ifs-body{padding:.5rem 0}' +
@@ -367,9 +386,10 @@
     sys: 'Design Object ID', proj: 'Project ID', appr: 'Approved', resp: 'Responsible Name',
     desc: 'Part Description', aIhc: 'IHC Attendance ID', aCls: 'Class Attendance ID', aCus: 'Customer Attendance ID',
     addInfo: 'Additional Information', note: 'Note', inv: 'Invitation ID', meet: 'Meeting Point',
-    tloc: 'Test Location', cNR: 'Class Not Required', uNR: 'Customer Not Required',
+    tloc: 'Test Location', cNR: 'Class Not Required', uNR: 'Customer Not Required', type: 'Type Description',
+    reqName: 'Requirement', srcType: 'Requirement Source', unif: 'Unified Reference Code', unifDesc: 'Unified Ref Code Description', sysDesc: 'Design Object Description',
   };
-  let FATH = [], FATR = [], FC = {}, FATMETA = null, FATERR = '', FATIDX = new Map(), FATBY = {}, FATVIEW = [], FATFILTER = 'all';
+  let FATH = [], FATR = [], FATALL = [], ARSYS = new Map(), ARPO = new Map(), VIEWROWS = [], FC = {}, FATMETA = null, FATERR = '', FATIDX = new Map(), FATBY = {}, FATVIEW = [], FATFILTER = 'all';
   let COMMITTED = {}, COMMITTED_META = null, DRAFT = {}, INFO_VER = 0;
   try { DRAFT = JSON.parse(localStorage.getItem(DRAFT_LS) || '{}') || {}; } catch (e) { DRAFT = {}; }
   const saveDraft = () => { try { localStorage.setItem(DRAFT_LS, JSON.stringify(DRAFT)); } catch (e) {} };
@@ -378,11 +398,20 @@
   const keepProj = (sub) => (window.ExpeditingCore && ExpeditingCore.keepProject) ? ExpeditingCore.keepProject(sub) : /^(YN|EN)/i.test(trim(sub));
 
   function setFat(headers, rows) {
-    FATH = headers; FC = {}; FATR = []; FATBY = {}; FATIDX = new Map(); FATERR = '';
+    FATH = headers; FC = {}; FATR = []; FATALL = []; ARSYS = new Map(); ARPO = new Map(); FATBY = {}; FATIDX = new Map(); FATERR = '';
     for (const k in FN) FC[k] = headers.findIndex(h => trim(h).toLowerCase() === FN[k].toLowerCase());
     const miss = ['order', 'line', 'rel', 'req', 'due', 'sys', 'proj'].filter(k => FC[k] < 0).map(k => FN[k]);
     if (miss.length) { FATERR = 'kolom(men) ontbreken in fat-list.json: ' + miss.join(', '); return; }
-    FATR = rows.filter(r => keepProj(r[FC.proj]));          // alleen onze projecten (YN/EN), zoals de expediting-lijst
+    FATALL = rows.filter(r => keepProj(r[FC.proj]));        // alleen onze projecten (YN/EN), zoals de expediting-lijst
+    // De FAT-tab toont alleen FAT-regels; zit er later ook andere requirements in het blad, dan blijven die buiten beeld
+    FATR = FATALL.filter(r => FC.type < 0 || !trim(r[FC.type]) || /fat|factory acceptance/i.test(trim(r[FC.type])));
+    // documentatie-index (alle requirements): per systeem (Unified Reference Code / Design Object ID) en per PO-regel
+    for (const r of FATALL) {
+      const sy = new Set([trim(fg(r, 'unif')), trim(fg(r, 'sys'))].filter(Boolean));
+      for (const k of sy) { if (!ARSYS.has(k)) ARSYS.set(k, []); ARSYS.get(k).push(r); }
+      const ol = trim(fg(r, 'order')) + '|' + trim(fg(r, 'line'));
+      if (!ARPO.has(ol)) ARPO.set(ol, []); ARPO.get(ol).push(r);
+    }
     for (const r of FATR) {
       FATBY[fkey(r)] = r;
       const lk = trim(fg(r, 'order')) + '|' + trim(fg(r, 'line'));
@@ -489,6 +518,106 @@
     DRAFT = {}; saveDraft(); INFO_VER++; render();
   }
 
+  // directe link naar de regel in IFS (scherm CCmtPoPartLine). Sleutelvolgorde en bedrijf zijn hier in te stellen.
+  const IFS_BASE = 'https://ihc.ifs.cloud:48080/client/runtime/Ifs.Fnd.Explorer.application';
+  const IFS_COMPANY = '233';
+  const IFS_KEY_ORDER = ['line', 'order', 'rel', 'req'];       // volgorde in key1, gescheiden met ^
+  const ifsUrl = (r) => {
+    const key = IFS_KEY_ORDER.map(k => trim(fg(r, k))).join('^');
+    const inner = 'ifsapf:tbwCCmtPoPartLine?action=get&key1=' + encodeURIComponent(key) + '&COMPANY=' + IFS_COMPANY;
+    return IFS_BASE + '?url=' + encodeURIComponent(inner);
+  };
+
+  // Alle FAT-regels van één PO in IFS: IFS verwacht de sleutels (gescheiden met \x1e) als gzip + base64 in 'zipParam'.
+  async function gzipB64(str) {
+    const cs = new CompressionStream('gzip');
+    const w = cs.writable.getWriter(); w.write(new TextEncoder().encode(str)); w.close();
+    const buf = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+    let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  // Bij een FAT met REQ_ID n bestaan op die Line/Release ook de requirements 1 t/m n-1: die nemen we mee.
+  const hasAllReqs = () => FATALL.length > FATR.length;           // blad bevat ook niet-FAT-requirements: dan echte sleutels gebruiken
+  const keyOf = (x) => IFS_KEY_ORDER.map(k => trim(fg(x, k))).join('^');
+  function lineKeys(r) {
+    if (hasAllReqs()) return FATALL.filter(x => trim(fg(x, 'order')) === trim(fg(r, 'order')) && trim(fg(x, 'line')) === trim(fg(r, 'line')) && trim(fg(x, 'rel')) === trim(fg(r, 'rel'))).map(keyOf);
+    const n = Math.max(1, parseInt(trim(fg(r, 'req')), 10) || 1), out = [];
+    for (let i = 1; i <= n; i++) out.push(IFS_KEY_ORDER.map(k => k === 'req' ? String(i) : trim(fg(r, k))).join('^'));
+    return out;
+  }
+  async function ifsKeysUrl(keys) {
+    let q;
+    if (keys.length <= 25) q = keys.map((k, i) => 'key' + (i + 1) + '=' + encodeURIComponent(k)).join('&');
+    else if (window.CompressionStream) q = 'zipParam=' + encodeURIComponent(await gzipB64(keys.join('\x1e')));
+    else throw new Error('Deze browser kan de lange IFS-link niet bouwen (CompressionStream ontbreekt) — gebruik een recente Edge of Chrome.');
+    return IFS_BASE + '?url=' + encodeURIComponent('ifsapf:tbwCCmtPoPartLine?action=get&' + q + '&COMPANY=' + IFS_COMPANY);
+  }
+  function ifsScopeKeys(scope, r) {
+    if (scope === 'line') return lineKeys(r);
+    const set = new Set();
+    if (hasAllReqs()) { for (const x of FATALL) if (trim(fg(x, 'order')) === trim(fg(r, 'order'))) set.add(keyOf(x)); }
+    else for (const x of FATR) if (trim(fg(x, 'order')) === trim(fg(r, 'order'))) lineKeys(x).forEach(k => set.add(k));
+    return [...set].sort();
+  }
+
+  // ── BETA: uitklapbare documentatie per systeem ──────────────────────────
+  // Welke documentatie (Type Description) wordt gevraagd voor dit systeem / deze PO-regel (uit addreq-list.json).
+  function docsFor(r) {
+    const seen = new Set(), out = [];
+    const add = (list) => { if (list) for (const x of list) { const k = fkey(x); if (!seen.has(k)) { seen.add(k); out.push(x); } } };
+    const sys = trim(val(r, 'sysNo'));
+    if (sys) add(ARSYS.get(sys));
+    if (C.line >= 0) add(ARPO.get(trim(val(r, 'orderNo')) + '|' + trim(val(r, 'line'))));
+    return out;
+  }
+  const SRC_TXT = { 'DESIGN OBJECT ADDITIONAL REQUIREMENT': 'Design object', 'PROJECT SPECIFIC ADDITIONAL REQUIREMENT': 'Project',
+    'USER DEFINED': 'Handmatig', 'PART ADDITIONAL REQUIREMENT': 'Onderdeel' };
+  function docState(x) {                                  // 0 = open, 1 = te laat, 2 = ontvangen, 3 = goedgekeurd
+    if (eff(x, 'appr') === 'Ja') return 3;
+    if (eff(x, 'recv')) return 2;
+    const d = toDate(fg(x, 'due')); return (d && d < startOfToday()) ? 1 : 0;
+  }
+  const DOC_ST = [['Open', 'lio-dim'], ['Te laat', 'lio-bad'], ['Ontvangen', 'lio-warn-c'], ['Goedgekeurd', 'lio-ok']];
+  function docHtml(r) {
+    const list = docsFor(r);
+    const sys = trim(val(r, 'sysNo')), sdesc = flat(val(r, 'refDesc'));
+    const head = '<div class="lio-doc-head"><b>' + esc(sys || ('PO ' + trim(val(r, 'orderNo')) + ' regel ' + trim(val(r, 'line')))) + '</b>' +
+      (sdesc ? ' · ' + esc(sdesc) : '') + '</div>';
+    if (!list.length) return head + '<div class="lio-dim">Geen requirements gevonden voor dit systeem in de geladen lijst.</div>';
+    const cnt = [0, 0, 0, 0]; list.forEach(x => cnt[docState(x)]++);
+    const byType = new Map(); list.forEach(x => { const t = trim(fg(x, 'type')) || '(zonder type)'; byType.set(t, (byType.get(t) || 0) + 1); });
+    const chips = [...byType.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'nl')).map(([t, n]) => '<span class="lio-chip">' + esc(t) + (n > 1 ? ' ×' + n : '') + '</span>').join('');
+    const sum = '<div class="lio-doc-sum"><b>' + list.length + '</b> gevraagd · <span class="lio-ok">' + cnt[3] + ' goedgekeurd</span> · ' + cnt[2] +
+      ' ontvangen · <span class="lio-bad-txt">' + cnt[1] + ' te laat</span> · ' + cnt[0] + ' open</div>';
+    const groups = new Map();
+    list.forEach(x => { const k = trim(fg(x, 'order')) + '|' + trim(fg(x, 'line')); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+    let tabs = '';
+    for (const [k, items] of groups) {
+      items.sort((a, b) => (trim(fg(a, 'type'))).localeCompare(trim(fg(b, 'type')), 'nl') || ((num(fg(a, 'req')) || 0) - (num(fg(b, 'req')) || 0)));
+      const f0 = items[0];
+      tabs += '<div class="lio-doc-grp">PO ' + esc(trim(fg(f0, 'order'))) + ' · regel ' + esc(trim(fg(f0, 'line'))) + ' · ' + esc(flat(fg(f0, 'desc'))) + ' · ' + esc(flat(fg(f0, 'vendor'))) + '</div>' +
+        '<table class="lio-doc"><thead><tr><th>Documentatie</th><th>Requirement</th><th>Bron</th><th>Vereist per</th><th>Ontvangen</th><th>Status</th><th>Opmerking</th></tr></thead><tbody>' +
+        items.map(x => { const st = docState(x);
+          return '<tr><td>' + esc(trim(fg(x, 'type'))) + '</td><td>' + esc(flat(fg(x, 'reqName'))) + '</td><td>' + esc(SRC_TXT[trim(fg(x, 'srcType'))] || trim(fg(x, 'srcType'))) +
+            '</td><td>' + esc(fmtDate(fg(x, 'due'))) + '</td><td>' + esc(fmtDate(eff(x, 'recv'))) + '</td><td class="' + DOC_ST[st][1] + '">' + DOC_ST[st][0] +
+            '</td><td>' + esc(flat(fg(x, 'note')) || flat(fg(x, 'addInfo'))) + '</td></tr>'; }).join('') + '</tbody></table>';
+    }
+    return head + sum + '<div class="lio-chips">' + chips + '</div>' + tabs;
+  }
+  function toggleDoc(btn) {
+    const tr = btn.closest('tr'), nxt = tr.nextElementSibling;
+    if (nxt && nxt.classList.contains('lio-detail')) {                         // inklappen
+      const sl = nxt.querySelector('.lio-slide'); btn.classList.remove('lio-open'); sl.style.maxHeight = '0px';
+      setTimeout(() => nxt.remove(), 260); return;
+    }
+    const r = VIEWROWS[+tr.dataset.ri]; if (!r) return;
+    const d = document.createElement('tr'); d.className = 'lio-detail';
+    d.innerHTML = '<td colspan="' + tr.children.length + '"><div class="lio-slide" style="max-height:0"><div class="lio-slide-in">' + docHtml(r) + '</div></div></td>';
+    tr.after(d); btn.classList.add('lio-open');
+    const sl = d.querySelector('.lio-slide'); sl.getBoundingClientRect(); sl.style.maxHeight = sl.scrollHeight + 'px';
+    setTimeout(() => { if (sl.isConnected && btn.classList.contains('lio-open')) sl.style.maxHeight = 'none'; }, 300);
+  }
+
   // afgeleide kolommen
   const attLet = (r, k) => { const v = trim(fg(r, k)); return (v === '' || v === '-') ? '' : v; };
   const needIhc = (r) => !!(attLet(r, 'aIhc') || attLet(r, 'aCls') || attLet(r, 'aCus'));   // letter in IHC/Class/Klant = IHC moet erbij zijn
@@ -558,9 +687,11 @@
   }
 
   // ── terugschrijven naar IFS (klembord !IFS.COPYOBJECT) ────────────────────
+  // Terugschrijven naar IFS staat uit: IFS maakt bij plakken een nieuwe regel (nieuw REQ_ID) aan. Zet op true om het paneel weer te tonen.
+  const IFS_WRITEBACK = false;
   function syncIfsPanel() {
     let p = $('lio-ifs');
-    if (TAB !== 'fat') { if (p) p.style.display = 'none'; return; }
+    if (!IFS_WRITEBACK || TAB !== 'fat') { if (p) p.style.display = 'none'; return; }
     if (!p) {
       p = document.createElement('details'); p.id = 'lio-ifs'; p.className = 'lio-ifs';
       p.innerHTML = '<summary>↩ Terugschrijven naar IFS (klembord)</summary><div class="lio-ifs-body">' +
@@ -568,11 +699,13 @@
         'alleen de gewijzigde regels. Kopieer die en plak ze terug in IFS. Naam IHC afwijkend van Responsible Name komt in Additional Information (<code>IHC aanwezig: naam</code>).</p>' +
         '<div class="lio-ifs-cols"><textarea id="lio-ifs-in" spellcheck="false" placeholder="Plak hier de IFS.COPYOBJECT-tekst…"></textarea>' +
         '<textarea id="lio-ifs-out" spellcheck="false" readonly placeholder="Bijgewerkte tekst verschijnt hier"></textarea></div>' +
+        '<label class="lio-dim" style="margin-right:.6rem"><input type="checkbox" id="lio-ifs-min"> alleen gewijzigde velden (test: werkt de bestaande regel dan bij?)</label>' +
         '<button class="btn-val" id="lio-ifs-run" type="button">↻ Verwerk</button> <button class="btn-val" id="lio-ifs-copy" type="button">📋 Kopieer resultaat</button> ' +
         '<span class="lio-fat-status" id="lio-ifs-msg"></span></div>';
       const wrap = document.querySelector('.lio-table-wrap'); wrap.parentNode.insertBefore(p, wrap);
       $('lio-ifs-in').addEventListener('input', runIfs);
       $('lio-ifs-run').addEventListener('click', runIfs);
+      $('lio-ifs-min').addEventListener('change', runIfs);
       $('lio-ifs-copy').addEventListener('click', () => {
         const o = $('lio-ifs-out'); if (!o.value) return;
         const done = () => { $('lio-ifs-msg').textContent = 'Gekopieerd ✓ — plak het terug in IFS'; };
@@ -586,7 +719,7 @@
     const txt = $('lio-ifs-in').value, out = $('lio-ifs-out'), msg = $('lio-ifs-msg');
     if (!txt.trim()) { out.value = ''; msg.textContent = ''; return; }
     if (!/\$RECORD=/.test(txt)) { out.value = ''; msg.textContent = 'Geen $RECORD gevonden — plak de volledige IFS.COPYOBJECT-tekst.'; return; }
-    const r = FatData.applyToIfs(txt, effectiveInfo());
+    const r = FatData.applyToIfs(txt, effectiveInfo(), { minimal: !!($('lio-ifs-min') && $('lio-ifs-min').checked) });
     out.value = r.text;
     const nf = r.touched.reduce((s, t) => s + t.fields.length, 0);
     msg.textContent = r.changed
@@ -671,6 +804,8 @@
       ...COMMON_TAIL,
     ],
     beta: [
+      { h: '',             k: 'exp',  f: r => '', html: r => docsFor(r).length ? '<button type="button" class="lio-exp" title="Toon gevraagde documentatie voor dit systeem">▸</button>' : '<span class="lio-dim" title="Geen requirements gevonden in addreq-list.json">·</span>',
+        title: 'Klik op ▸ om te zien welke documentatie (Type Description) gevraagd wordt' },
       { h: 'Score',        k: 'bscore', f: r => String(betaOf(r).score), num: true, n: r => betaOf(r).score,
         cls: r => LEVEL[betaOf(r).level][1] + ' lio-strong', title: 'Kritiekheidsscore (0-100+): gewicht + FAT + additional requirements' },
       { h: 'Risico',       k: 'blevel', f: r => LEVEL[betaOf(r).level][0], n: r => betaOf(r).score,
@@ -691,6 +826,10 @@
       ...COMMON_TAIL,
     ],
     fat: [
+      { h: 'IFS',          k: 'ifs',  f: r => '', html: r => '<a class="lio-ifs-link" href="' + esc(ifsUrl(r)) + '" target="_blank" rel="noopener" title="Open deze regel in IFS">🔗</a> ' +
+          '<a class="lio-ifs-x" href="#" data-scope="line" title="Open deze regel in IFS met de voorgaande requirements (1 t/m dit nummer)">📄</a> ' +
+          '<a class="lio-ifs-x" href="#" data-scope="po" title="Open de hele PO in IFS: alle FAT-regels met hun voorgaande requirements">📑</a>',
+        title: '🔗 = alleen deze regel · 📄 = deze Line/Release met voorgaande requirements · 📑 = hele PO (alle FAT-regels met voorgaande requirements)' },
       { h: 'Project',      k: 'sp',   f: r => trim(fg(r, 'proj')) },
       { h: 'PO',           k: 'po',   f: r => trim(fg(r, 'order')) },
       { h: 'Regel/Rel.',   k: 'ln',   f: r => trim(fg(r, 'line')) + '/' + trim(fg(r, 'rel')), n: r => (num(fg(r, 'line')) || 0) * 1000 + (num(fg(r, 'rel')) || 0),
@@ -775,6 +914,7 @@
     const defs = DEFS[TAB];
     const rows = miss.length ? [] : sortRows(applySearch(rowsFor(TAB), defs), defs);
     if (TAB === 'fat') FATVIEW = rows;
+    VIEWROWS = rows;
     syncIfsPanel();
 
     const s = SORT[TAB];
@@ -799,7 +939,7 @@
     }
     $('lio-summary').innerHTML = summaryFor(TAB, rows);
     $('lio-tbody').innerHTML = rows.length
-      ? rows.map(r => '<tr' + (TAB === 'fat' ? ' data-k="' + esc(fkey(r)) + '"' : '') + '>' + defs.map(d => {
+      ? rows.map((r, ri) => '<tr data-ri="' + ri + '"' + (TAB === 'fat' ? ' data-k="' + esc(fkey(r)) + '"' : '') + '>' + defs.map(d => {
           const cls = [d.num ? 'lio-num' : '', d.cls ? d.cls(r) : ''].filter(Boolean).join(' ');
           const v = d.f(r);
           const lv = d.live ? ' data-live="' + d.k + '"' : '';
@@ -849,6 +989,7 @@
       return '<b>' + rows.length + '</b> items met minimaal 1 factor · ' +
         '<span class="lio-bad-txt"><b>' + c.red + '</b> rood</span> · <b>' + c.orange + '</b> oranje · <b>' + c.green + '</b> groen · ' +
         '<b>' + c3 + '</b> met alle 3 factoren' +
+        (!FATALL.length ? ' <br><span class="lio-dim">Documentatie per systeem (▸) vraagt <code>addreq-list.json</code> in <code>shared/</code> — upload het blad "Add Req" via Admin.</span>' : '') +
         (C.addReq < 0 ? ' <br><span class="lio-bad-txt">⚠ Kolom "Additional Requirements" zit niet in de geladen lijst — requirements tellen nu als 0.</span>' : '') +
         '<br><span class="lio-dim">Factoren: gewicht ≥ ' + fmtNum(THRESHOLD) + ' kg · FAT aanwezig · ≥ 1 additional requirement. ' +
         'Requirements wegen het zwaarst; 2 van de 3 weegt minder dan 3 van de 3.</span>';
