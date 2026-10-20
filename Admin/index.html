@@ -87,6 +87,7 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
       <p><b>Sleep de .xlsx hierheen</b> of klik om te kiezen</p>
       <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
       <p class="muted" style="margin-top:.6rem">Tabblad <code>Result</code> · headerrij wordt automatisch gedetecteerd</p>
+      <p class="muted" style="margin-top:.3rem">Optioneel tabblad <code>FAT</code> (IFS-export van de FAT-requirements) → levert ook <code>fat-list.json</code></p>
       <p class="muted" id="msg" style="margin-top:.4rem">—</p>
     </div>
     <p class="muted" style="margin-top:.9rem;line-height:1.55">
@@ -95,6 +96,12 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
       daarna gebruikt iedereen op alle pagina's automatisch dezelfde lijst.
       <button class="btn" id="redownload" style="margin-left:.4rem">↻ Bestand opnieuw downloaden</button>
     </p>
+    <p class="muted" style="margin-top:.7rem;line-height:1.55">
+      Zit er een tabblad <code>FAT</code> in de Excel, dan wordt ook <code>fat-list.json</code> gedownload
+      (voor de FAT Overview in de Large Item Overview). Commit dat bestand eveneens naar <code>shared/</code>.
+      <button class="btn" id="fat-redownload" style="margin-left:.4rem" disabled>↻ fat-list.json opnieuw downloaden</button>
+    </p>
+    <p class="muted" id="fatmsg" style="margin-top:.4rem">FAT-blad: nog niet ingelezen in deze sessie</p>
   </div>
 
   <div class="panel">
@@ -160,9 +167,10 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
 <script src="../shared/expediting-core.js"></script>
 <script src="../shared/expediting-data.js"></script>
 <script src="../shared/inspection-rules.js"></script>
+<script src="../shared/fat-data.js"></script>
 <script>
 const dz=document.getElementById('dz'),fi=document.getElementById('file');
-let _lastCommitJSON=null;
+let _lastCommitJSON=null, _lastFatJSON=null;
 function _offerDownload(text,name){
   const blob=new Blob([text],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
@@ -186,6 +194,18 @@ function read(file){
     _lastCommitJSON = ExpeditingData.buildCommitJSON(rawTable,{filename:file.name});
     _offerDownload(_lastCommitJSON,'expediting-data.json');
     document.getElementById('msg').textContent='Verwerkt ✓ — commit het gedownloade expediting-data.json naar shared/';
+    // Optioneel FAT-blad → fat-list.json (fouten hier blokkeren de Result-upload niet)
+    const fm=document.getElementById('fatmsg'), fb=document.getElementById('fat-redownload');
+    try{
+      const fsn=FatData.findSheet(wb);
+      if(fsn){
+        const t=FatData.tableFromSheet(wb.Sheets[fsn]);
+        _lastFatJSON=FatData.buildCommitJSON(t,{filename:file.name});
+        setTimeout(()=>_offerDownload(_lastFatJSON,'fat-list.json'),800);   // tweede download iets later (browsers vragen soms toestemming)
+        fb.disabled=false;
+        fm.textContent='FAT-blad "'+fsn+'": '+t.rows.length.toLocaleString('nl-NL')+' regels ✓ — commit het gedownloade fat-list.json naar shared/';
+      }else{ _lastFatJSON=null; fb.disabled=true; fm.textContent='Geen FAT-blad in dit bestand — fat-list.json niet bijgewerkt.'; }
+    }catch(err){ _lastFatJSON=null; fb.disabled=true; fm.textContent='FAT-blad: fout — '+err.message; }
     showStatus();
   }catch(err){ document.getElementById('msg').textContent='Fout: '+err.message; } };
   r.readAsArrayBuffer(file);
@@ -202,6 +222,7 @@ async function showStatus(){
   kpis.innerHTML=[[lines.length,'open regels'],[sup.length,'leveranciers'],[multi,'multi-project'],[late,'te laat'],[unconf,'onbevestigd']]
     .map(p=>'<div class="kpi"><b>'+p[0].toLocaleString('nl-NL')+'</b><small>'+p[1]+'</small></div>').join('');
 }
+document.getElementById('fat-redownload').onclick=()=>{ if(_lastFatJSON) _offerDownload(_lastFatJSON,'fat-list.json'); };
 document.getElementById('clear').onclick=async()=>{ if(confirm('Centrale lijst wissen?')){ await ExpeditingData.clear(); showStatus(); } };
 document.getElementById('redownload').onclick=async()=>{
   const raw=await ExpeditingData.loadRawLocal(), m=await ExpeditingData.metaLocal();
@@ -398,4 +419,4 @@ irRender();
 </script>
 <script src="../shared/shared.js"></script>
 </body>
-</html>
+</html>
