@@ -1,7 +1,8 @@
-/* fat-data.js — gedeelde FAT-datalaag (Admin + Large Item Overview)
+/* fat-data.js — gedeelde datalaag voor alle requirements/FAT (Admin + Large Item Overview)
  *
- * 1) Admin: leest het blad "FAT" uit de bedrijfsbrede Expediten-Excel en maakt fat-list.json.
- * 2) Large Item Overview: laadt fat-list.json (naast expediting-data.json in shared/).
+ * 1) Admin: leest het blad "Add Req" (alle additionele requirements, inclusief FAT) uit de bedrijfsbrede
+ *    Expediten-Excel en maakt addreq-list.json. (Een blad "FAT" wordt nog steeds herkend.)
+ * 2) Large Item Overview: laadt addreq-list.json (naast expediting-data.json in shared/).
  * 3) IFS-terugschrijven: leest een !IFS.COPYOBJECT-klembord (CCmtPoPartLine), past onze
  *    invulling toe en geeft de bijgewerkte tekst terug om in IFS te plakken.
  *
@@ -9,11 +10,21 @@
  */
 (function (global) {
   'use strict';
-  const FILE = 'fat-list.json';
+  const FILE = 'addreq-list.json', LEGACY_FILE = 'fat-list.json';
   const SRC = (document.currentScript && document.currentScript.src) || '';
   const trim = v => String(v == null ? '' : v).trim();
   const pad = n => String(n).padStart(2, '0');
   const low = s => trim(s).toLowerCase();
+
+  // Kolommen die in het JSON-bestand komen (de rest van de 89 IFS-kolommen is niet nodig en maakt het bestand groot)
+  const KEEP = ['Order No', 'Line No', 'Release No', 'Requirement Id', 'Date Received', 'Date Required', 'Wanted Delivery Date',
+    'Vendor Name', 'Design Object ID', 'Part No.', 'Part Description', 'Requirement', 'Type Description', 'Type ID', 'Requirement Source',
+    'Project ID', 'Project Description', 'Approved', 'Responsible Name', 'No of Copies Required', 'No of Copies Received',
+    'IHC Attendance ID', 'Class Attendance ID', 'Customer Attendance ID', 'IHC Acceptance Description', 'Moment of Inspection',
+    'Acceptance Criteria', 'Additional Information', 'Note', 'ITP Remarks', 'Invitation ID', 'Meeting Point', 'Test Location',
+    'Test Duration', 'Test Duration Unit', 'Class Not Required', 'Customer Not Required', 'Unified Reference Code',
+    'Unified Ref Code Description', 'Design Object Description', 'Documents Added', 'Line Description'];
+  const KEEP_LOW = new Set(KEEP.map(low));
 
   // ── Excel → tabel ─────────────────────────────────────────────────────────
   function cellOut(v) {
@@ -35,7 +46,7 @@
   // Het blad "FAT"; anders elk ander blad (niet "Result") met de kopkolommen Design Object ID + Type Description.
   function findSheet(wb) {
     const names = wb.SheetNames || [];
-    const byName = names.find(n => low(n) === 'fat');
+    const byName = names.find(n => /^add\s*req/.test(low(n))) || names.find(n => low(n) === 'fat');
     if (byName) return byName;
     for (const n of names) {
       if (low(n) === 'result') continue;
@@ -52,7 +63,7 @@
     const hi = headerOf(raw);
     if (hi < 0) throw new Error('FAT-blad: kolommen "Order No" en "Line No" niet gevonden.');
     const keep = []; const headers = [];
-    raw[hi].forEach((h, i) => { if (trim(h)) { keep.push(i); headers.push(trim(h)); } });
+    raw[hi].forEach((h, i) => { if (trim(h) && KEEP_LOW.has(low(h))) { keep.push(i); headers.push(trim(h)); } });
     const iOrder = headers.findIndex(h => low(h) === 'order no');
     const rows = [];
     for (let r = hi + 1; r < raw.length; r++) {
@@ -71,9 +82,10 @@
 
   // ── laden ─────────────────────────────────────────────────────────────────
   async function load() {
-    const url = (SRC ? new URL(FILE, SRC).href : '../shared/' + FILE) + '?v=' + Date.now();
-    const resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const get = (f) => fetch((SRC ? new URL(f, SRC).href : '../shared/' + f) + '?v=' + Date.now(), { cache: 'no-store' });
+    let resp = await get(FILE);
+    if (!resp.ok) resp = await get(LEGACY_FILE);                 // oud bestand (alleen FAT) als het nieuwe er nog niet staat
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — ' + FILE + ' niet gevonden');
     const o = await resp.json();
     if (!o || !Array.isArray(o.headers) || !Array.isArray(o.rows)) throw new Error('fat-list.json heeft een onverwacht formaat');
     return o;
@@ -124,7 +136,8 @@
   }
   /* Past onze invulling (info = { sleutel: { veld: waarde } }) toe op het geplakte klembord.
    * Geeft { text, changed, total, unknown[], touched[] } — text bevat ALLEEN de gewijzigde blokken. */
-  function applyToIfs(text, info) {
+  function applyToIfs(text, info, opts) {
+    opts = opts || {};
     const p = parseIfs(text);
     const out = []; const touched = []; let n = 0;
     for (const b of p.blocks) {
@@ -144,12 +157,19 @@
         const fld = b.f.ADD_INFO;
         if (fld) setv('ADD_INFO', flatTxt(addInfoWith(fld.v, ov.ihc === '-' ? '' : ov.ihc, (b.f.CF$_C_RESPONSIBLE_NAME || {}).v)));
       }
-      if (diff) { out.push(b.start, ...lines); touched.push({ key: b.key, fields: what }); n++; }
+      if (diff) {
+        if (opts.minimal) {                      // alleen de sleutelvelden + de gewijzigde velden
+          const names = ['ORDER_NO', 'LINE_NO', 'RELEASE_NO', 'REQ_ID'].concat(what);
+          const idx = names.map(nm => b.f[nm] && b.f[nm].i).filter(i => i != null).sort((a, c) => a - c);
+          out.push(b.start, ...idx.map(i => lines[i]), b.lines[b.lines.length - 1] === '-' ? '-' : '-');
+        } else out.push(b.start, ...lines);
+        touched.push({ key: b.key, fields: what }); n++;
+      }
     }
     const unknown = p.blocks.filter(b => !info[b.key]).map(b => b.key);
     const text2 = n ? p.head.concat(out).join(p.eol) + p.eol : '';
     return { text: text2, changed: n, total: p.blocks.length, unknown, touched };
   }
 
-  global.FatData = { FILE, findSheet, tableFromSheet, buildCommitJSON, load, key, parseIfs, applyToIfs, ihcFromAddInfo, IFS_FIELDS };
+  global.FatData = { FILE, KEEP, findSheet, tableFromSheet, buildCommitJSON, load, key, parseIfs, applyToIfs, ihcFromAddInfo, IFS_FIELDS };
 })(typeof window !== 'undefined' ? window : globalThis);
