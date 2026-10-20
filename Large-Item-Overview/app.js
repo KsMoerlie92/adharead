@@ -527,6 +527,64 @@
     return IFS_BASE + '?url=' + encodeURIComponent('ifsapf:tbwCCmtPoPartLine?action=get&' + q + '&COMPANY=' + IFS_COMPANY);
   }
 
+  // ── BETA: uitklapbare documentatie per systeem ──────────────────────────
+  // Welke documentatie (Type Description) wordt gevraagd voor dit systeem / deze PO-regel (uit addreq-list.json).
+  function docsFor(r) {
+    const seen = new Set(), out = [];
+    const add = (list) => { if (list) for (const x of list) { const k = fkey(x); if (!seen.has(k)) { seen.add(k); out.push(x); } } };
+    const sys = trim(val(r, 'sysNo'));
+    if (sys) add(ARSYS.get(sys));
+    if (C.line >= 0) add(ARPO.get(trim(val(r, 'orderNo')) + '|' + trim(val(r, 'line'))));
+    return out;
+  }
+  const SRC_TXT = { 'DESIGN OBJECT ADDITIONAL REQUIREMENT': 'Design object', 'PROJECT SPECIFIC ADDITIONAL REQUIREMENT': 'Project',
+    'USER DEFINED': 'Handmatig', 'PART ADDITIONAL REQUIREMENT': 'Onderdeel' };
+  function docState(x) {                                  // 0 = open, 1 = te laat, 2 = ontvangen, 3 = goedgekeurd
+    if (eff(x, 'appr') === 'Ja') return 3;
+    if (eff(x, 'recv')) return 2;
+    const d = toDate(fg(x, 'due')); return (d && d < startOfToday()) ? 1 : 0;
+  }
+  const DOC_ST = [['Open', 'lio-dim'], ['Te laat', 'lio-bad'], ['Ontvangen', 'lio-warn-c'], ['Goedgekeurd', 'lio-ok']];
+  function docHtml(r) {
+    const list = docsFor(r);
+    const sys = trim(val(r, 'sysNo')), sdesc = flat(val(r, 'refDesc'));
+    const head = '<div class="lio-doc-head"><b>' + esc(sys || ('PO ' + trim(val(r, 'orderNo')) + ' regel ' + trim(val(r, 'line')))) + '</b>' +
+      (sdesc ? ' · ' + esc(sdesc) : '') + '</div>';
+    if (!list.length) return head + '<div class="lio-dim">Geen requirements gevonden voor dit systeem in de geladen lijst.</div>';
+    const cnt = [0, 0, 0, 0]; list.forEach(x => cnt[docState(x)]++);
+    const byType = new Map(); list.forEach(x => { const t = trim(fg(x, 'type')) || '(zonder type)'; byType.set(t, (byType.get(t) || 0) + 1); });
+    const chips = [...byType.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'nl')).map(([t, n]) => '<span class="lio-chip">' + esc(t) + (n > 1 ? ' ×' + n : '') + '</span>').join('');
+    const sum = '<div class="lio-doc-sum"><b>' + list.length + '</b> gevraagd · <span class="lio-ok">' + cnt[3] + ' goedgekeurd</span> · ' + cnt[2] +
+      ' ontvangen · <span class="lio-bad-txt">' + cnt[1] + ' te laat</span> · ' + cnt[0] + ' open</div>';
+    const groups = new Map();
+    list.forEach(x => { const k = trim(fg(x, 'order')) + '|' + trim(fg(x, 'line')); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+    let tabs = '';
+    for (const [k, items] of groups) {
+      items.sort((a, b) => (trim(fg(a, 'type'))).localeCompare(trim(fg(b, 'type')), 'nl') || ((num(fg(a, 'req')) || 0) - (num(fg(b, 'req')) || 0)));
+      const f0 = items[0];
+      tabs += '<div class="lio-doc-grp">PO ' + esc(trim(fg(f0, 'order'))) + ' · regel ' + esc(trim(fg(f0, 'line'))) + ' · ' + esc(flat(fg(f0, 'desc'))) + ' · ' + esc(flat(fg(f0, 'vendor'))) + '</div>' +
+        '<table class="lio-doc"><thead><tr><th>Documentatie</th><th>Requirement</th><th>Bron</th><th>Vereist per</th><th>Ontvangen</th><th>Status</th><th>Opmerking</th></tr></thead><tbody>' +
+        items.map(x => { const st = docState(x);
+          return '<tr><td>' + esc(trim(fg(x, 'type'))) + '</td><td>' + esc(flat(fg(x, 'reqName'))) + '</td><td>' + esc(SRC_TXT[trim(fg(x, 'srcType'))] || trim(fg(x, 'srcType'))) +
+            '</td><td>' + esc(fmtDate(fg(x, 'due'))) + '</td><td>' + esc(fmtDate(eff(x, 'recv'))) + '</td><td class="' + DOC_ST[st][1] + '">' + DOC_ST[st][0] +
+            '</td><td>' + esc(flat(fg(x, 'note')) || flat(fg(x, 'addInfo'))) + '</td></tr>'; }).join('') + '</tbody></table>';
+    }
+    return head + sum + '<div class="lio-chips">' + chips + '</div>' + tabs;
+  }
+  function toggleDoc(btn) {
+    const tr = btn.closest('tr'), nxt = tr.nextElementSibling;
+    if (nxt && nxt.classList.contains('lio-detail')) {                         // inklappen
+      const sl = nxt.querySelector('.lio-slide'); btn.classList.remove('lio-open'); sl.style.maxHeight = '0px';
+      setTimeout(() => nxt.remove(), 260); return;
+    }
+    const r = VIEWROWS[+tr.dataset.ri]; if (!r) return;
+    const d = document.createElement('tr'); d.className = 'lio-detail';
+    d.innerHTML = '<td colspan="' + tr.children.length + '"><div class="lio-slide" style="max-height:0"><div class="lio-slide-in">' + docHtml(r) + '</div></div></td>';
+    tr.after(d); btn.classList.add('lio-open');
+    const sl = d.querySelector('.lio-slide'); sl.getBoundingClientRect(); sl.style.maxHeight = sl.scrollHeight + 'px';
+    setTimeout(() => { if (sl.isConnected && btn.classList.contains('lio-open')) sl.style.maxHeight = 'none'; }, 300);
+  }
+
   // afgeleide kolommen
   const attLet = (r, k) => { const v = trim(fg(r, k)); return (v === '' || v === '-') ? '' : v; };
   const needIhc = (r) => !!(attLet(r, 'aIhc') || attLet(r, 'aCls') || attLet(r, 'aCus'));   // letter in IHC/Class/Klant = IHC moet erbij zijn
