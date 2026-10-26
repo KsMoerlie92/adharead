@@ -156,6 +156,7 @@
       if (c.num) { const nv = (typeof v === 'number') ? v : toNum(v); return nv === null ? v : nv; }
       if (c.text) v = String(v);
       if (c.apos) v = "'" + String(v).replace(/^'+/, '');
+      if (c.k === 'D') { const m = String(v).match(/^'?\s*[-\u2013]?\s*(\d+)\s*-\s*(\d+)$/); if (m) v = "'-" + (+m[1]) + '-' + (+m[2]); }   // vast formaat '-1-1
       return v;
     }));
     const wsData = [row1, row2, ...body];

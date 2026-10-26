@@ -170,7 +170,7 @@
     const orderNo = trim(expRow[EXP.ORDER]);
     const line    = trim(expRow[EXP.LINE]);
     const release = trim(expRow[EXP.RELEASE]);
-    const item    = (line && release) ? `'${line}-${release}` : line;  // ' prefix voorkomt datumopmaak in Excel
+    const item    = (line && release) ? `'-${line}-${release}` : line;  // ' prefix voorkomt datumopmaak in Excel
 
     const fill = (ilCol, val) => {
       if (!trim(ilRow[ilCol]) && trim(val)) ilRow[ilCol] = val;

@@ -334,6 +334,13 @@ function _valCanon(list, value) {
   for (const o of list) if (String(o).toLowerCase() === t) return o;
   return null;
 }
+// ── Item (kolom D): vast formaat '-<regel>-<release>, bv. '-1-1, '-1-2 ───────────
+// Neemt "'1-1", "1-1", "-1-1" en "'-1-1" over; andere waarden blijven ongemoeid.
+function _valItemFmt(v) {
+  if (typeof v !== 'string') return v;
+  const m = v.replace(/\u00A0/g, ' ').trim().match(/^'?\s*[-\u2013]?\s*(\d+)\s*-\s*(\d+)$/);
+  return m ? `'-${+m[1]}-${+m[2]}` : v;
+}
 function _valNormalizeCase() {
   let n = 0;
   for (const row of _valRows) {
@@ -849,7 +856,7 @@ function _fillRowFromExpediting(cells, expeditingData) {
     const line    = String(match['Line No']    ?? '').trim();
     const release = String(match['Release No'] ?? '').trim();
     if (line || release) {
-      cells[COL.D] = line && release ? `'${line}-${release}` : line || release;
+      cells[COL.D] = line && release ? `'-${line}-${release}` : line || release;
       filled++;
     }
   }
@@ -1541,11 +1548,14 @@ function exportValidatedItemlijst() {
       const isNumericCol = NUMERIC_COLS.has(colLetter);
       const cleanNum     = row.computed ? row.computed[colLetter] : undefined;
       const useClean     = isNumericCol && cleanNum !== undefined;
-      const val = useClean ? cleanNum : row.cells[colIdx];
+      let val = useClean ? cleanNum : row.cells[colIdx];
       if (val === undefined || val === null || val === '') return;
+      // Kolom D: altijd in het vaste formaat '-1-1 wegschrijven (ook bij onbewerkte rijen)
+      let fmtD = false;
+      if (colLetter === 'D') { const nv = _valItemFmt(val); if (nv !== val) { val = nv; fmtD = true; } }
       // Numerieke kolommen altijd herschrijven (ook als de rij verder niet
       // bewerkt is); overige kolommen zoals voorheen alleen bij edit/virtueel.
-      if (!(useClean || row._edited || isVirtual)) return;
+      if (!(useClean || row._edited || isVirtual || fmtD)) return;
       const addr = XLSX.utils.encode_cell({ r: wsRowIdx, c: colIdx });
       if (!ws[addr]) ws[addr] = {};
       ws[addr].v = val;
