@@ -332,6 +332,8 @@ function _valCanon(list, value) {
   const t = String(value ?? '').replace(/\u00A0/g, ' ').trim().toLowerCase();
   if (!t) return null;
   for (const o of list) if (String(o).toLowerCase() === t) return o;
+  // Eenheid: "pcs" (ook pc / pce) betekent Piece(s) — stil omzetten, geen foutmelding
+  if (list === VL_UOM && /^(pcs|pc|pce)\.?$/.test(t)) return 'Piece(s)';
   return null;
 }
 // ── Item (kolom D): vast formaat '-<regel>-<release>, bv. '-1-1, '-1-2 ───────────
