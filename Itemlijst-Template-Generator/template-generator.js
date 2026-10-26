@@ -66,7 +66,7 @@
     const C = ExpeditingCore.COLS;
     const lineNo = trim(r['Line No']);
     const releaseNo = trim(r['Release No']);
-    const item = (lineNo && releaseNo) ? `'${lineNo}-${releaseNo}` : lineNo;
+    const item = (lineNo && releaseNo) ? `'-${lineNo}-${releaseNo}` : lineNo;
     // IHC PO moet het KALE PO-nummer zijn — kolom B (Order No) van de
     // bedrijfsbrede Expediting-lijst. Kolom A (Purchase Order No) is een
     // GECOMBINEERDE sleutel (PO-Line-Release, bv. "3156006528-40-1") en
