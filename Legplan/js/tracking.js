@@ -27,9 +27,15 @@
     AMS: { n: 'Amsterdam (AMS)', c: 'NL', ll: [52.31, 4.76] },
     HAN: { n: 'Hanoi (HAN)', c: 'VN', ll: [21.22, 105.81] }
   };
+  /* Routekeuze: de scheepvaart mijdt nu Rode Zee/Suez/Hormuz en vaart om Afrika (Kaap de Goede Hoop).
+     Zet ROUTE_VIA op 'suez' om terug te gaan naar de route door het Suezkanaal. */
+  var ROUTE_VIA = 'cape';
   var SUEZ = [[50.2, -3.5], [36.0, -6.2], [37.0, 10.5], [34.0, 26], [31.3, 32.4], [27.5, 34], [20, 38.5],
     [12.6, 43.3], [12.0, 50], [7, 62], [6, 80], [5.5, 95], [1.3, 103.8], [8, 106], [14, 109.5]];
-  function seaRoute(dest) { return [PORTS[ORIGIN].ll].concat(SUEZ, [PORTS[dest].ll]); }
+  var CAPE = [[50.2, -3.5], [46.5, -6.5], [43.5, -10.2], [36.8, -10.2], [28, -16.5], [15, -18.5], [5, -12],
+    [2, -3], [-5, 7], [-17, 9], [-30, 14], [-36, 19], [-36, 26], [-33, 34], [-30, 45], [-18, 65], [-2, 82],
+    [5.5, 95], [1.3, 103.8], [8, 106], [14, 109.5]];
+  function seaRoute(dest) { return [PORTS[ORIGIN].ll].concat(ROUTE_VIA === 'suez' ? SUEZ : CAPE, [PORTS[dest].ll]); }
   function airRoute(dest) { return [PORTS.AMS.ll, PORTS[dest].ll]; }
   function destKey(raw) {
     var s = String(raw || '');
@@ -213,7 +219,7 @@
     });
     var pos = f >= 1 ? PORTS[sh.dest].ll : f <= 0 ? PORTS[from].ll : a.pos;
     var m = L.marker(pos, { icon: icon(sh, a.bearing) }).addTo(S.layer);
-    m.bindPopup('<b>Shipment ' + E(sh.no) + '</b><br>' + E(PORTS[from].n) + ' → ' + E(PORTS[sh.dest].n) + '<br>ETA <b>' + E(fmt(sh.eta) !== '—' ? fmt(sh.eta) : (sh.etaTxt || '—')) + '</b><br>' + ST[sh.status].l + (sh.pct != null && sh.status === 'transit' ? ' · ' + sh.pct + '% (geschat)' : ''));
+    m.bindPopup('<b>Shipment ' + E(sh.no) + '</b><br>' + E(PORTS[from].n) + ' → ' + E(PORTS[sh.dest].n) + '<br>ETA <b>' + E(fmt(sh.eta) !== '—' ? fmt(sh.eta) : (sh.etaTxt || '—')) + '</b><br>' + ST[sh.status].l + (sh.mode !== 'air' ? '<br><span style="color:#6b7a90">Route om Afrika (Kaap de Goede Hoop)</span>' : '') + (sh.pct != null && sh.status === 'transit' ? ' · ' + sh.pct + '% (geschat)' : ''));
     if (fit) S.map.fitBounds(L.latLngBounds(route).pad(.25), { maxZoom: 4 });
   }
 
