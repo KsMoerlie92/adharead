@@ -82,6 +82,9 @@
     out['Quantity'] = trim(r[C.qty]);
     out['Unit of measure'] = trim(r[C.uom] || r['Purch UoM']);
     out['Supplier'] = trim(r[C.supplier]);
+    // Leverancier met "IHC" in de naam: Part No alvast voorinvullen in Serial number
+    // (Serial number wordt later toch voor partnummers gebruikt).
+    if (/ihc/i.test(out['Supplier'])) out['Serial number'] = trim(r[C.part] || r['Part No']);
     // Mark/Label alleen vooraf invullen als het al bekend is (Unified Reference
     // Code) — anders is dit juist het veld dat de leverancier/het merkproces
     // nog moet invullen (zie "Merken van colli"-proces).
