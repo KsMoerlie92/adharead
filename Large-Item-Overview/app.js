@@ -389,7 +389,7 @@
     tloc: 'Test Location', cNR: 'Class Not Required', uNR: 'Customer Not Required', type: 'Type Description',
     reqName: 'Requirement', srcType: 'Requirement Source', unif: 'Unified Reference Code', unifDesc: 'Unified Ref Code Description', sysDesc: 'Design Object Description',
   };
-  let FATH = [], FATR = [], FATALL = [], ARSYS = new Map(), ARPO = new Map(), VIEWROWS = [], FC = {}, FATMETA = null, FATERR = '', FATIDX = new Map(), FATBY = {}, FATVIEW = [], FATFILTER = 'all', FATDONE = false;
+  let FATH = [], FATR = [], FATALL = [], ARSYS = new Map(), ARPO = new Map(), VIEWROWS = [], FC = {}, FATMETA = null, FATERR = '', FATIDX = new Map(), FATBY = {}, FATVIEW = [], FATFILTER = 'all', FATHIDE = false;
   let COMMITTED = {}, COMMITTED_META = null, DRAFT = {}, INFO_VER = 0;
   try { DRAFT = JSON.parse(localStorage.getItem(DRAFT_LS) || '{}') || {}; } catch (e) { DRAFT = {}; }
   const saveDraft = () => { try { localStorage.setItem(DRAFT_LS, JSON.stringify(DRAFT)); } catch (e) {} };
@@ -598,8 +598,8 @@
     const x = Math.round((d - startOfToday()) / 86400000);
     return x < 0 ? 0 : x <= 14 ? 1 : 2;
   }
-  // Afgerond = Invitation ID aanwezig én protocol ontvangen (Date Received) én Approved = Ja → standaard verborgen
-  const doneOf = (r) => !!(eff(r, 'inv') && eff(r, 'recv') && eff(r, 'appr') === 'Ja');
+  // Afgerond = protocol ontvangen (Date Received) én Approved = Ja; wordt alleen weggefilterd als het vinkje aan staat
+  const doneOf = (r) => !!(eff(r, 'recv') && eff(r, 'appr') === 'Ja');
   const FILTERS = [['all', 'Alle FAT-regels'], ['adm', 'Administratie bijwerken'], ['need', 'IHC erbij vereist'], ['late', 'Achterstallig'],
     ['soon', 'Binnen 14 dagen'], ['norecv', 'Protocol niet ontvangen'], ['open', 'Nog niet goedgekeurd'], ['appr', 'Goedgekeurd']];
   function fatPass(r) {
@@ -614,7 +614,7 @@
     }
     return true;
   }
-  const fatRowsFor = () => FATR.filter(r => (!SPSEL.size || SPSEL.has(trim(fg(r, 'proj')))) && (FATDONE || !doneOf(r)) && fatPass(r));
+  const fatRowsFor = () => FATR.filter(r => (!SPSEL.size || SPSEL.has(trim(fg(r, 'proj')))) && (!FATHIDE || !doneOf(r)) && fatPass(r));
 
   // koppeling BETA ↔ FAT-lijst op Order No + Line No
   function fatLink(r) {
@@ -925,13 +925,13 @@
       : TAB === 'fat'
       ? '<select class="lio-in" id="lio-fat-filter" title="Filter">' +
           FILTERS.map(f => '<option value="' + f[0] + '"' + (f[0] === FATFILTER ? ' selected' : '') + '>' + f[1] + '</option>').join('') + '</select> ' +
-        '<label class="lio-thr" title="Regels met Invitation ID, ontvangen protocol en Approved = Ja zijn standaard verborgen"><input type="checkbox" id="lio-fat-done"' + (FATDONE ? ' checked' : '') + '> Afgeronde regels tonen</label> ' +
+        '<label class="lio-thr" title="Verbergt regels waarbij Date Received en Approved zijn ingevuld"><input type="checkbox" id="lio-fat-done"' + (FATHIDE ? ' checked' : '') + '> Afgeronde regels verbergen</label> ' +
         '<button class="btn-val" id="lio-fat-reset" type="button" title="Wist je eigen invulling in deze browser">↺ Eigen wijzigingen wissen</button> ' +
         '<span class="lio-fat-status" id="lio-fat-status"></span>' : '';
     if (TAB === 'fat') {
       $('lio-fat-reset').addEventListener('click', resetDraft);
       updateFatStatus();
-      const fdone = $('lio-fat-done'); if (fdone) fdone.addEventListener('change', () => { FATDONE = fdone.checked; render(); });
+      const fdone = $('lio-fat-done'); if (fdone) fdone.addEventListener('change', () => { FATHIDE = fdone.checked; render(); });
       const fsel = $('lio-fat-filter'); if (fsel) fsel.addEventListener('change', () => { FATFILTER = fsel.value; render(); });
     }
     const inp = $('lio-threshold');
@@ -968,7 +968,7 @@
     return '<b>' + rows.length + '</b> FAT-regels · <span class="lio-bad-txt"><b>' + c(r => stOf(r) === 0) + '</b> achterstallig</span> · <b>' +
       c(r => stOf(r) === 1) + '</b> binnen 14 dgn · <b>' + c(r => !!eff(r, 'recv')) + '</b> protocol ontvangen · <b>' +
       c(r => stOf(r) === 3) + '</b> goedgekeurd · <b>' + c(needIhc) + '</b> met IHC erbij · <b>' + c(admOf) + '</b> administratie bijwerken' +
-      (FATDONE ? '' : ' · <span class="lio-dim"><b>' + FATR.filter(r => (!SPSEL.size || SPSEL.has(trim(fg(r, 'proj')))) && doneOf(r)).length + '</b> afgerond (verborgen)</span>') +
+      (!FATHIDE ? '' : ' · <span class="lio-dim"><b>' + FATR.filter(r => (!SPSEL.size || SPSEL.has(trim(fg(r, 'proj')))) && doneOf(r)).length + '</b> afgerond (verborgen)</span>') +
       '<br><span class="lio-dim">Grijs/ingevuld uit IFS (fat-list.json); gele rand = eigen wijziging. Klik op een kolomkop om te sorteren.</span>';
 
   }
