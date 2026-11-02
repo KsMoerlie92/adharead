@@ -87,6 +87,17 @@
     26: ['Blocking issues closed', 'Technical approval complete', 'FAT approval complete', 'QA approval complete'],
     27: ['Decision recorded', 'Owner', 'Conditions', 'Open issues', 'Dossier reference']
   };
+  // Welke punten horen bij welk type bezoek (meerdere types = samen). Geen type = alle 27.
+  // Een logistieke inspectie volgt pas ná een eventuele FAT aan het eind van het traject:
+  // daar horen dus geen planning/voortgang/FAT-voorbereiding bij, wel de FAT-afronding (#15, #26).
+  const SCOPE = {
+    'Milestone': [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 16, 21, 22, 23, 24],
+    'Logistics inspection': [1, 6, 7, 12, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27],
+    'FAT': [1, 8, 10, 12, 14, 15, 20, 21, 22, 23],
+    'Audit': Array.from({ length: 27 }, (x, i) => i + 1),
+    'Follow-up': [1, 11, 14, 21, 22, 23, 26]
+  };
+  const TYPE_NL = { 'Milestone': 'milestone-bezoek', 'Logistics inspection': 'logistieke inspectie', 'FAT': 'FAT', 'Audit': 'audit', 'Follow-up': 'follow-up-bezoek' };
   const VISIT_TYPES = ['Milestone', 'Logistics inspection', 'FAT', 'Audit', 'Follow-up'];
   const STATUSES = [['C', 'C', 'Compliant'], ['O', 'O', 'Observation'], ['NC', 'NC', 'Non-conf.'], ['NA', 'N/A', 'n.v.t.']];
   const PTS = { C: 1, O: 0.5, NC: 0 };
@@ -106,7 +117,7 @@
     return {
       v: 1,
       hdr: { supplier: '', date: today(), project: '', po: '', location: '', expediter: '', rep: '', client: '', present: '', status: 'Concept', types: [], goal: '', summary: '' },
-      pts: {}, extra: [], photos: [],
+      pts: {}, extra: [], photos: [], ref: { pos: [], source: '' },
       rel: { decision: '', conditions: '', action: '', owner: '', ref: '' },
       sign: ROLES.map(() => ({ name: '', date: today(), sig: '' }))
     };
@@ -115,6 +126,11 @@
   let TAB = 'bezoek';
   let GRP = 'prep';           // gekozen stap in de configurator
   const OPEN = {};            // uitgeklapte auditpunten (alleen UI-staat)
+  let SHOWALL = false;        // ook punten buiten de scope van het bezoektype tonen
+  let EXP = null, EXPMETA = null, POQ = '';   // bedrijfsbrede expeditinglijst (alleen-lezen)
+  function scopeSet() { if (!D.hdr.types.length) return null; const s = new Set(); D.hdr.types.forEach((t) => (SCOPE[t] || []).forEach((n) => s.add(n))); return s; }
+  function inScope(no) { const s = scopeSet(); return !s || s.has(+no) || !!(D.pts[no] || {}).st; }
+  function dateNl(iso) { if (!iso) return ''; const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); return isNaN(d) ? String(iso) : d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }); }
 
   /* ── afgeleide gegevens: score, bevindingen, advies ─────────────────────── */
   function pt(no) { return D.pts[no] || (D.pts[no] = { st: '', checks: [], man: '', remark: '', owner: '', due: '', fstatus: 'Open', approval: '', blocking: false }); }
@@ -127,8 +143,10 @@
   const unconfirmed = (no) => { const d = D.pts[no] || {}; return (CHECKS[no] || []).filter((c, i) => (d.checks || []).indexOf(i) < 0); };
 
   function derive() {
-    let sum = 0, n = 0; const cnt = { C: 0, O: 0, NC: 0, NA: 0, open: 0 };
+    let sum = 0, n = 0, total = 0; const cnt = { C: 0, O: 0, NC: 0, NA: 0, open: 0 };
     POINTS.forEach((p) => {
+      if (!inScope(p.no)) return;
+      total++;
       const s = (D.pts[p.no] || {}).st;
       if (!s) { cnt.open++; return; }
       cnt[s]++;
@@ -145,7 +163,7 @@
     findings.forEach((f, i) => { f.fid = 'F-' + String(i + 1).padStart(2, '0'); });
     const blocking = findings.some((f) => f.blocking && f.fstatus !== 'Closed');
     const suggestion = blocking || cls.startsWith('D') ? 'NOGO' : cls.startsWith('A') ? 'GO' : n ? 'CONDITIONAL' : '';
-    return { score, cls, cnt, scored: n, findings, blocking, suggestion };
+    return { score, cls, cnt, scored: n, total, findings, blocking, suggestion };
   }
 
   /* ── opslag (IndexedDB) ─────────────────────────────────────────────────── */
@@ -204,18 +222,168 @@
       '<input type="text" data-k="photo:' + p.id + '" value="' + esc(p.desc) + '" placeholder="Omschrijving"></div>').join('') + '</div>' + photoButtons(ref);
   }
 
+  /* ── koppeling met de bedrijfsbrede expeditinglijst (project → leverancier → PO) ── */
+  const COLDEF = { orderNo: 'Order No', sub: 'Sub Project ID', subDesc: 'Sub Project Description', supplier: 'Supplier Name', buyer: 'Buyer Name', tc: 'Technical Coordinator Name', part: 'Part No', desc: 'Description', uref: 'Unified Reference Code', qty: 'Qty', status: 'PO Line Status', planned: 'Planned Delivery Date', lwr: 'Latest Wanted Receipt Date', fatReq: 'FAT Date Required' };
+  const COL = (k) => (window.ExpeditingCore && ExpeditingCore.COLS && ExpeditingCore.COLS[k]) || COLDEF[k];
+  const tv = (v) => String(v == null ? '' : v).trim();
+  const capital = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  const trimDot = (x) => tv(x).replace(/[.\s]+$/, '');
+  async function loadExp() {
+    try {
+      if (!window.ExpeditingData) return;
+      const raw = await ExpeditingData.loadRaw(); if (raw && Array.isArray(raw.rows)) EXP = raw.rows;
+      try { EXPMETA = await ExpeditingData.meta(); } catch (e) { EXPMETA = null; }
+    } catch (e) { EXP = null; }
+    if (TAB === 'bezoek') renderPO();
+  }
+  function poMatches() {
+    if (!EXP) return [];
+    const pj = tv(D.hdr.project).toLowerCase(), sp = tv(D.hdr.supplier).toLowerCase(), q = tv(POQ).toLowerCase();
+    if (!pj && !sp && !q) return [];
+    const by = new Map();
+    EXP.forEach((r) => {
+      const sub = tv(r[COL('sub')]), sd = tv(r[COL('subDesc')]), su = tv(r[COL('supplier')]), o = tv(r[COL('orderNo')]);
+      if (!o) return;
+      if (pj && sub.toLowerCase().indexOf(pj) < 0 && sd.toLowerCase().indexOf(pj) < 0) return;
+      if (sp && su.toLowerCase().indexOf(sp) < 0) return;
+      if (q && o.toLowerCase().indexOf(q) < 0) return;
+      let g = by.get(o); if (!g) { g = { order: o, supplier: su, sub, subDesc: sd, n: 0 }; by.set(o, g); } g.n++;
+    });
+    return Array.from(by.values()).sort((a, b) => (a.order < b.order ? -1 : 1));
+  }
+  function lineSnap(r) {
+    return { line: tv(r['Line No']), rel: tv(r['Release No']), part: tv(r[COL('part')]), desc: tv(r[COL('desc')]), uref: tv(r[COL('uref')]), qty: tv(r[COL('qty')]),
+      uom: tv(r['Purch UoM']), status: tv(r[COL('status')]), planned: tv(r[COL('planned')]), lwr: tv(r[COL('lwr')]), fat: tv(r[COL('fatReq')]) };
+  }
+  function pickPO(order) {
+    const ex = D.ref.pos.findIndex((x) => x.order === order);
+    if (ex >= 0) D.ref.pos.splice(ex, 1);
+    else {
+      const rows = (EXP || []).filter((r) => tv(r[COL('orderNo')]) === order); if (!rows.length) return;
+      const r0 = rows[0];
+      D.ref.pos.push({ order, supplier: tv(r0[COL('supplier')]), sub: tv(r0[COL('sub')]), subDesc: tv(r0[COL('subDesc')]), buyer: tv(r0[COL('buyer')]), tc: tv(r0[COL('tc')]),
+        lines: rows.map(lineSnap).sort((a, b) => (+a.line - +b.line) || (+a.rel - +b.rel)) });
+      const up = EXPMETA && (EXPMETA.uploaded || EXPMETA.date); D.ref.source = up ? String(up).slice(0, 10) : '';
+    }
+    syncPOHeader(); save(); render();
+  }
+  function syncPOHeader() {
+    const P = D.ref.pos; if (!P.length) return;
+    D.hdr.po = P.map((x) => x.order).join(', ');
+    const sups = Array.from(new Set(P.map((x) => x.supplier))), subs = Array.from(new Set(P.map((x) => x.sub)));
+    if (sups.length === 1) D.hdr.supplier = sups[0];
+    if (subs.length === 1) D.hdr.project = subs[0];
+  }
+  function poBox() {
+    if (!EXP) return '<div class="vm-empty">' + (window.ExpeditingData ? 'Expeditinglijst laden…' : 'De expeditinglijst is niet beschikbaar — vul de gegevens handmatig in.') + '</div>';
+    if (!tv(D.hdr.project) && !tv(D.hdr.supplier) && !tv(POQ)) return '<div class="vm-empty">Kies een project en/of leverancier; de bijbehorende PO\'s verschijnen hier.</div>';
+    const m = poMatches();
+    if (!m.length) return '<div class="vm-empty">Geen PO\'s gevonden voor deze combinatie.</div>';
+    const sel = new Set(D.ref.pos.map((x) => x.order));
+    return '<div class="vm-polist">' + m.slice(0, 40).map((g) => '<button type="button" class="vm-po' + (sel.has(g.order) ? ' on' : '') + '" data-act="po-pick" data-o="' + esc(g.order) + '"><span class="box">✓</span><span class="vm-po-main"><b>PO ' + esc(g.order) + '</b><small>' + esc(g.supplier) + ' · ' + esc(g.sub) + (projDesc(g) ? ' – ' + esc(projDesc(g)) : '') + '</small></span><span class="vm-tile-prog">' + g.n + ' regel' + (g.n === 1 ? '' : 's') + '</span></button>').join('') + '</div>' +
+      (m.length > 40 ? '<p class="vm-hint">Nog ' + (m.length - 40) + ' PO\'s — verfijn met leverancier of PO-nummer.</p>' : '');
+  }
+  function dlists() {
+    if (!EXP) return '';
+    const pj = tv(D.hdr.project).toLowerCase(), projs = new Map(), sups = new Set();
+    EXP.forEach((r) => {
+      const sub = tv(r[COL('sub')]); if (sub && !projs.has(sub)) projs.set(sub, tv(r[COL('subDesc')]));
+      const su = tv(r[COL('supplier')]); if (su && (!pj || sub.toLowerCase().indexOf(pj) >= 0)) sups.add(su);
+    });
+    return '<datalist id="dl-proj">' + Array.from(projs).sort().map((x) => '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>').join('') + '</datalist>' +
+      '<datalist id="dl-sup">' + Array.from(sups).sort().map((v) => '<option value="' + esc(v) + '"></option>').join('') + '</datalist>';
+  }
+  function poSelected() {
+    if (!D.ref.pos.length) return '';
+    return '<div class="vm-q">Gekoppelde PO\'s (referentie voor het verslag)</div>' + D.ref.pos.map((x) =>
+      '<div class="vm-find"><button type="button" class="vm-btn vm-btn-sm" style="float:right;padding:.25rem .6rem" data-act="po-del" data-o="' + esc(x.order) + '" aria-label="Ontkoppel">✕</button>' +
+      '<b class="fid">PO ' + esc(x.order) + '</b> · ' + esc(x.supplier) + '<br><span class="vm-hint">' + esc(x.sub) + (projDesc(x) ? ' – ' + esc(projDesc(x)) : '') + ' · ' + x.lines.length + ' regel(s)' + (x.buyer ? ' · buyer ' + esc(x.buyer) : '') + '</span>' +
+      '<div class="vm-hint" style="margin-top:.35rem">' + x.lines.slice(0, 6).map((l) => esc(l.line + '-' + l.rel + '  ' + l.desc)).join('<br>') + (x.lines.length > 6 ? '<br>…' : '') + '</div></div>').join('');
+  }
+  function renderPO() { const r = $('vm-po-res'); if (r) r.innerHTML = poBox(); const d = $('vm-dl'); if (d) d.innerHTML = dlists(); }
+
+  /* ── samenvatting als lopende tekst ─────────────────────────────────────── */
+  // projectomschrijving zonder het herhaalde projectnummer ("YN1320 - Cable layer" → "Cable layer")
+  const projDesc = (x) => tv(x.subDesc).replace(new RegExp('^' + tv(x.sub).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[-–:]\\s*', 'i'), '');
+  const joinNl = (a) => (a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' en ' + a[a.length - 1]);
+  const nWord = (n, one, more) => n + ' ' + (n === 1 ? one : more);
+  function narrative(dv) {
+    dv = dv || derive();
+    const H = D.hdr, out = [], types = H.types.map((t) => TYPE_NL[t] || t);
+    let p1 = 'Op ' + (dateNl(H.date) || '[datum]') + ' heeft ' + (H.expediter || 'IHC') + ' ' + (types.length ? 'een ' + joinNl(types) : 'een leveranciersbezoek') +
+      ' uitgevoerd bij ' + (H.supplier || 'de leverancier') + (H.location ? ' in ' + H.location : '');
+    const sd = D.ref.pos[0] ? projDesc(D.ref.pos[0]) : '';
+    if (H.project) p1 += ' voor project ' + H.project + (sd ? ' (' + sd + ')' : '');
+    if (D.ref.pos.length) p1 += ', met betrekking tot ' + (D.ref.pos.length === 1 ? 'PO ' : 'de PO\'s ') + joinNl(D.ref.pos.map((x) => x.order + ' (' + nWord(x.lines.length, 'regel', 'regels') + ')'));
+    else if (H.po) p1 += ', met betrekking tot ' + H.po;
+    p1 += '.'; if (H.present) p1 += ' Aanwezig waren ' + trimDot(H.present) + '.';
+    out.push(p1);
+
+    const parts = [];
+    GROUPS.forEach((g) => {
+      const pts = g.pts.filter((no) => inScope(no) && (D.pts[no] || {}).st); if (!pts.length) return;
+      const c = { C: 0, O: 0, NC: 0, NA: 0 }; pts.forEach((no) => { c[D.pts[no].st]++; });
+      const areas = Array.from(new Set(pts.map((no) => POINTS[no - 1].area)));
+      const res = [];
+      if (c.C) res.push(c.C === pts.length ? 'alles was in orde' : c.C + ' in orde');
+      if (c.O) res.push(nWord(c.O, 'observatie', 'observaties'));
+      if (c.NC) res.push(nWord(c.NC, 'non-conformiteit', 'non-conformiteiten'));
+      if (c.NA) res.push(c.NA + ' niet van toepassing');
+      parts.push('bij ' + (/^[A-Z]{2}/.test(g.title) ? g.title : g.title.charAt(0).toLowerCase() + g.title.slice(1)) + ' ' + (pts.length === 1 ? 'is 1 punt' : 'zijn ' + pts.length + ' punten') + ' nagelopen (' + areas.join(', ') + '): ' + joinNl(res));
+    });
+    if (parts.length) {
+      let p2 = 'Tijdens het bezoek is de Field Expediting Checklist doorlopen. ' + capital(parts.join('; ')) + '.';
+      if (dv.cnt.open) p2 += ' ' + capital(nWord(dv.cnt.open, 'punt', 'punten')) + ' binnen de scope van dit bezoek ' + (dv.cnt.open === 1 ? 'is' : 'zijn') + ' niet beoordeeld.';
+      out.push(p2);
+    } else out.push('Er zijn nog geen punten van de checklist beoordeeld.');
+
+    if (!dv.findings.length) out.push('Er zijn geen afwijkingen vastgesteld.');
+    else {
+      const s = ['Er ' + (dv.findings.length === 1 ? 'is één bevinding' : 'zijn ' + dv.findings.length + ' bevindingen') + ' vastgelegd.'];
+      dv.findings.forEach((f) => {
+        const p = f.ptNo ? POINTS[f.ptNo - 1] : null;
+        let t = f.fid + ' is een ' + (f.blocking ? 'blokkerende ' : '') + (f.type === 'NCR' ? 'non-conformiteit' : 'observatie') + (p ? ' bij punt #' + p.no + ' (' + p.area + ')' : '');
+        const miss = f.kind === 'pt' && f.type === 'OBS' ? unconfirmed(f.ptNo) : [];
+        const txt = trimDot(f.text);
+        if (txt) t += ': ' + txt;
+        if (miss.length) t += (txt ? '; ' : ': ') + 'niet bevestigd ' + (miss.length === 1 ? 'is ' : 'zijn ') + joinNl(miss);
+        t += '.';
+        const fol = []; if (f.owner) fol.push('de opvolging ligt bij ' + f.owner); if (f.due) fol.push('uiterlijk ' + dateNl(f.due));
+        t += ' ' + capital((fol.length ? fol.join(', ') + '; ' : '') + 'status: ' + (f.fstatus === 'Closed' ? 'gesloten' : 'open')) + '.';
+        s.push(t);
+      });
+      out.push(s.join(' '));
+    }
+
+    const r = D.rel;
+    let p4 = dv.scored ? 'De auditscore komt uit op ' + pct(dv.score) + ' (classificatie ' + dv.cls + ')' + (dv.blocking ? ', met ten minste één openstaande blokkerende non-conformiteit' : '') + '.' : '';
+    const dec = r.decision === 'GO' ? 'Op basis hiervan is de zending vrijgegeven (GO).'
+      : r.decision === 'CONDITIONAL' ? 'De zending is voorwaardelijk vrijgegeven (CONDITIONAL GO)' + (r.conditions ? ', onder de volgende voorwaarden: ' + trimDot(r.conditions) : '') + '.'
+      : r.decision === 'NOGO' ? 'De zending is niet vrijgegeven (NO GO)' + (r.conditions ? ' vanwege: ' + trimDot(r.conditions) : '') + '.'
+      : 'Er is nog geen vrijgavebesluit vastgelegd.';
+    p4 += (p4 ? ' ' : '') + dec;
+    if (r.action) p4 += ' Vereiste corrigerende actie: ' + trimDot(r.action) + '.';
+    if (r.owner) p4 += ' Het besluit is vastgelegd door ' + trimDot(r.owner) + '.';
+    if (r.ref) p4 += ' Dossierreferentie: ' + trimDot(r.ref) + '.';
+    out.push(p4);
+    if (tv(H.summary)) out.push(tv(H.summary));
+    return out;
+  }
+  const narrHtml = () => narrative().map((x) => '<p>' + esc(x).replace(/\n/g, '<br>') + '</p>').join('');
+  function updateNarr() { const n = $('vm-narr'); if (n) n.innerHTML = narrHtml(); }
+
   /* ── tabbladen ──────────────────────────────────────────────────────────── */
   function tabs() {
     const dv = derive();
-    const list = [['bezoek', 'Bezoek'], ['checklist', 'Checklist', (27 - dv.cnt.open) + '/27'], ['bevind', 'Bevindingen', String(dv.findings.length)],
+    const list = [['bezoek', 'Bezoek'], ['checklist', 'Checklist', (dv.total - dv.cnt.open) + '/' + dv.total], ['bevind', 'Bevindingen', String(dv.findings.length)],
       ['fotos', "Foto's", String(D.photos.length)], ['vrijgave', 'Vrijgave'], ['teken', 'Ondertekening']];
     $('vm-tabs').innerHTML = list.map((t) => '<button type="button" class="vm-tab' + (t[0] === TAB ? ' on' : '') + '" data-tab="' + t[0] + '">' + t[1] + (t[2] ? '<small>' + t[2] + '</small>' : '') + '</button>').join('');
   }
   function updateBar() {
     const dv = derive();
     $('vm-bar-info').innerHTML = '<b>' + (dv.scored ? 'Score ' + pct(dv.score) + ' · ' + dv.cls.split(' - ')[0] : 'Nog niet beoordeeld') + '</b><br>' +
-      (27 - dv.cnt.open) + '/27 punten · ' + dv.findings.length + ' bevinding' + (dv.findings.length === 1 ? '' : 'en') + ' · ' + D.photos.length + " foto's";
-    const t = document.querySelector('.vm-tab[data-tab=checklist] small'); if (t) t.textContent = (27 - dv.cnt.open) + '/27';
+      (dv.total - dv.cnt.open) + '/' + dv.total + ' punten · ' + dv.findings.length + ' bevinding' + (dv.findings.length === 1 ? '' : 'en') + ' · ' + D.photos.length + " foto's";
+    const t = document.querySelector('.vm-tab[data-tab=checklist] small'); if (t) t.textContent = (dv.total - dv.cnt.open) + '/' + dv.total;
     const b = document.querySelector('.vm-tab[data-tab=bevind] small'); if (b) b.textContent = String(dv.findings.length);
     const f = document.querySelector('.vm-tab[data-tab=fotos] small'); if (f) f.textContent = String(D.photos.length);
   }
@@ -224,40 +392,42 @@
     opts = opts || {};
     return '<div class="' + (opts.full ? 'full' : '') + '"><label class="f">' + label + (opts.area
       ? '<textarea data-k="' + key + '" placeholder="' + esc(opts.ph || '') + '">' + esc(val) + '</textarea>'
-      : '<input type="' + (opts.type || 'text') + '" data-k="' + key + '" value="' + esc(val) + '" placeholder="' + esc(opts.ph || '') + '">') + '</label></div>';
+      : '<input type="' + (opts.type || 'text') + '" data-k="' + key + '"' + (opts.list ? ' list="' + opts.list + '" autocomplete="off"' : '') + ' value="' + esc(val) + '" placeholder="' + esc(opts.ph || '') + '">') + '</label></div>';
   }
 
   function viewBezoek() {
     const h = D.hdr;
-    return '<section class="vm-card"><h2>Bezoekgegevens</h2><div class="vm-grid">' +
-      fld('Supplier / IHC Unit', 'hdr.supplier', h.supplier) + fld('Audit date', 'hdr.date', h.date, { type: 'date' }) +
-      fld('Project / Yard no.', 'hdr.project', h.project) + fld('PO / Delivery ref.', 'hdr.po', h.po) +
+    return '<section class="vm-card"><h2>Project, leverancier &amp; PO</h2><div class="vm-grid">' +
+      fld('Project / Yard no.', 'hdr.project', h.project, { list: 'dl-proj', ph: 'Bijv. YN1320 of projectnaam' }) +
+      fld('Supplier / IHC Unit', 'hdr.supplier', h.supplier, { list: 'dl-sup', ph: 'Begin met typen…' }) +
+      '<div class="full"><label class="f">PO-nummer zoeken (optioneel)<input type="text" data-ui="poq" value="' + esc(POQ) + '" placeholder="Bijv. 3156018519" inputmode="numeric" autocomplete="off"></label></div>' +
+      '</div><div id="vm-dl">' + dlists() + '</div><div id="vm-po-res" style="margin-top:.6rem">' + poBox() + '</div>' + poSelected() + '</section>' +
+      '<section class="vm-card"><h2>Type bezoek</h2><p class="vm-hint" style="margin:0 0 .4rem">Het type bepaalt welke checklistpunten van toepassing zijn.</p><div class="vm-chips">' +
+      VISIT_TYPES.map((t) => '<button type="button" class="vm-chip' + (h.types.indexOf(t) >= 0 ? ' on' : '') + '" data-act="type" data-t="' + t + '">' + t + ' <small>' + (SCOPE[t] || []).length + '</small></button>').join('') +
+      '</div></section>' +
+      '<section class="vm-card"><h2>Bezoekgegevens</h2><div class="vm-grid">' +
+      fld('Audit date', 'hdr.date', h.date, { type: 'date' }) + fld('PO / Delivery ref.', 'hdr.po', h.po) +
       fld('Location', 'hdr.location', h.location) + fld('Field Expediter', 'hdr.expediter', h.expediter) +
       fld('Supplier representative', 'hdr.rep', h.rep) + fld('Client', 'hdr.client', h.client) +
       fld('Aanwezig (namen)', 'hdr.present', h.present, { full: true, ph: 'Bijv. Kris Moerlie, Jan Jansen (leverancier)' }) +
-      '</div></section>' +
-      '<section class="vm-card"><h2>Type bezoek</h2><div class="vm-chips">' +
-      VISIT_TYPES.map((t) => '<button type="button" class="vm-chip' + (h.types.indexOf(t) >= 0 ? ' on' : '') + '" data-act="type" data-t="' + t + '">' + t + '</button>').join('') +
-      '</div></section>' +
-      '<section class="vm-card"><h2>Doel &amp; samenvatting</h2><div class="vm-grid">' +
       fld('Doel van het bezoek (optioneel)', 'hdr.goal', h.goal, { full: true, area: true, ph: 'Komt in het verslag onder "Doel van het bezoek"' }) +
-      fld('Samenvatting / conclusie (optioneel)', 'hdr.summary', h.summary, { full: true, area: true, ph: 'Komt onderaan in het verslag' }) +
       '<div class="full"><label class="f">Status van het verslag<select data-k="hdr.status"><option' + (h.status === 'Concept' ? ' selected' : '') + '>Concept</option><option' + (h.status === 'Final' ? ' selected' : '') + '>Final</option></select></label></div>' +
       '</div></section>' +
       '<button type="button" class="vm-btn vm-btn-teal" data-tab="checklist" style="width:100%">Naar de checklist →</button>';
   }
-
   const STATE_ICO = { C: '✓', O: '!', NC: '✕', NA: '–', '': '' };
   const STATE_TXT = { C: 'Compliant', O: 'Observation', NC: 'Non-conformity', NA: 'N/A', '': 'Nog niet beoordeeld' };
-  const grpProg = (g) => { let done = 0; g.pts.forEach((no) => { if ((D.pts[no] || {}).st) done++; }); return done; };
+  const visPts = (g) => g.pts.filter((no) => SHOWALL || inScope(no));
+  const visGroups = () => GROUPS.filter((g) => visPts(g).length);
+  const grpProg = (g) => { let done = 0; visPts(g).forEach((no) => { if ((D.pts[no] || {}).st) done++; }); return done; };
 
   function tileHtml(p, dv) {
     const d = D.pts[p.no] || {}; const st = d.st || '', open = !!OPEN[p.no];
     const chk = CHECKS[p.no] || [], ticked = (d.checks || []).length;
-    let h = '<section class="vm-card vm-tile' + (st ? ' s-' + st : '') + (open ? ' open' : '') + '" id="pt-' + p.no + '">' +
+    let h = '<section class="vm-card vm-tile' + (st ? ' s-' + st : '') + (open ? ' open' : '') + (inScope(p.no) ? '' : ' out') + '" id="pt-' + p.no + '">' +
       '<button type="button" class="vm-tile-head" data-act="tile" data-no="' + p.no + '" aria-expanded="' + open + '">' +
       '<span class="vm-tile-ico">' + STATE_ICO[st] + '</span>' +
-      '<span class="vm-tile-main"><span class="vm-pt-top"><span class="vm-pt-no">#' + p.no + '</span><span>' + p.area + '</span><span class="vm-pt-cat">' + p.cat + '</span></span>' +
+      '<span class="vm-tile-main"><span class="vm-pt-top"><span class="vm-pt-no">#' + p.no + '</span><span>' + p.area + '</span><span class="vm-pt-cat">' + p.cat + '</span>' + (inScope(p.no) ? '' : '<span class="vm-pt-cat">buiten scope</span>') + '</span>' +
       '<span class="vm-pt-text">' + esc(p.text) + '</span></span>' +
       '<span class="vm-tile-prog">' + (st === 'NA' ? 'n.v.t.' : st === 'NC' ? 'NC' : ticked + '/' + chk.length) + '</span></button>';
     if (open) {
@@ -285,17 +455,22 @@
   }
 
   function viewChecklist() {
-    const dv = derive();
-    const gi = Math.max(0, GROUPS.findIndex((g) => g.id === GRP)), g = GROUPS[gi];
-    const step = '<div class="vm-steps">' + GROUPS.map((x, i) => {
-      const done = grpProg(x), full = done === x.pts.length;
-      return '<button type="button" class="vm-step' + (x.id === GRP ? ' on' : '') + (full ? ' full' : '') + '" data-act="grp" data-g="' + x.id + '"><span class="vm-step-ico">' + (full ? '✓' : x.icon) + '</span><span class="vm-step-t">' + (i + 1) + '. ' + x.title + '</span><small>' + done + '/' + x.pts.length + '</small></button>';
+    const dv = derive(), G = visGroups();
+    if (!G.some((g) => g.id === GRP)) GRP = (G[0] || GROUPS[0]).id;
+    const gi = Math.max(0, G.findIndex((g) => g.id === GRP)), g = G[gi], sc = scopeSet();
+    const scopeBar = '<div class="vm-scope">' + (sc
+      ? '<span>Type bezoek: <b>' + D.hdr.types.join(' + ') + '</b> — ' + sc.size + ' van 27 punten van toepassing.</span>'
+      : '<span>Geen type bezoek gekozen — alle 27 punten worden getoond. Kies het type op het tabblad Bezoek om alleen de relevante punten te zien.</span>') +
+      (sc ? '<button type="button" class="vm-btn vm-btn-sm" data-act="showall">' + (SHOWALL ? 'Alleen relevante punten' : 'Toon alle 27 punten') + '</button>' : '') + '</div>';
+    const step = '<div class="vm-steps">' + G.map((x, i) => {
+      const done = grpProg(x), tot = visPts(x).length, full = done === tot;
+      return '<button type="button" class="vm-step' + (x.id === GRP ? ' on' : '') + (full ? ' full' : '') + '" data-act="grp" data-g="' + x.id + '"><span class="vm-step-ico">' + (full ? '✓' : x.icon) + '</span><span class="vm-step-t">' + (i + 1) + '. ' + x.title + '</span><small>' + done + '/' + tot + '</small></button>';
     }).join('') + '</div>';
-    let h = step + '<div class="vm-gh"><h2>' + g.icon + ' ' + g.title + '</h2><span>Stap ' + (gi + 1) + ' van ' + GROUPS.length + ' · ' + grpProg(g) + '/' + g.pts.length + ' beoordeeld</span></div>' +
+    let h = scopeBar + step + '<div class="vm-gh"><h2>' + g.icon + ' ' + g.title + '</h2><span>Stap ' + (gi + 1) + ' van ' + G.length + ' · ' + grpProg(g) + '/' + visPts(g).length + ' beoordeeld</span></div>' +
       '<p class="vm-hint" style="margin:0 0 .6rem">Tik een punt open, vink aan wat ter plaatse bevestigd is en voeg zo nodig bewijs toe.</p>';
-    h += g.pts.map((no) => tileHtml(POINTS[no - 1], dv)).join('');
-    h += gi < GROUPS.length - 1
-      ? '<button type="button" class="vm-btn vm-btn-teal" data-act="grp" data-g="' + GROUPS[gi + 1].id + '" style="width:100%">Volgende: ' + GROUPS[gi + 1].title + ' →</button>'
+    h += visPts(g).map((no) => tileHtml(POINTS[no - 1], dv)).join('');
+    h += gi < G.length - 1
+      ? '<button type="button" class="vm-btn vm-btn-teal" data-act="grp" data-g="' + G[gi + 1].id + '" style="width:100%">Volgende: ' + G[gi + 1].title + ' →</button>'
       : '<button type="button" class="vm-btn vm-btn-teal" data-tab="bevind" style="width:100%">Klaar — naar de bevindingen →</button>';
     return h;
   }
@@ -347,7 +522,10 @@
       '<div class="vm-grid" style="margin-top:.8rem">' +
       fld('Conditions / blocking reasons', 'rel.conditions', r.conditions, { full: true, area: true }) +
       fld('Required corrective action', 'rel.action', r.action, { full: true, area: true }) +
-      fld('Release decision owner / date', 'rel.owner', r.owner) + fld('Final release reference / dossier', 'rel.ref', r.ref) + '</div></section>';
+      fld('Release decision owner / date', 'rel.owner', r.owner) + fld('Final release reference / dossier', 'rel.ref', r.ref) + '</div></section>' +
+      '<section class="vm-card"><h2>Samenvatting voor het verslag</h2><p class="vm-hint" style="margin:0 0 .5rem">Wordt automatisch opgebouwd uit het bezoek, de checklist, de bevindingen en het vrijgavebesluit.</p>' +
+      '<div class="vm-narr" id="vm-narr">' + narrHtml() + '</div>' +
+      fld('Eigen aanvulling (optioneel, komt achter de samenvatting)', 'hdr.summary', D.hdr.summary, { full: true, area: true }) + '</section>';
   }
 
   function viewTeken() {
@@ -391,7 +569,13 @@
     D[parts[0]][parts[1]] = val;
   }
   const main = $('vm-main');
-  main.addEventListener('input', (e) => { const k = e.target.dataset && e.target.dataset.k; if (!k || e.target.type === 'checkbox') return; setByKey(k, e.target.value); save(); });
+  main.addEventListener('input', (e) => {
+    if (e.target.dataset && e.target.dataset.ui === 'poq') { POQ = e.target.value; renderPO(); return; }
+    const k = e.target.dataset && e.target.dataset.k; if (!k || e.target.type === 'checkbox') return;
+    setByKey(k, e.target.value); save();
+    if (k === 'hdr.project' || k === 'hdr.supplier') renderPO();
+    if (TAB === 'vrijgave') updateNarr();
+  });
   main.addEventListener('change', (e) => {
     const k = e.target.dataset && e.target.dataset.k; if (!k) return;
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -414,6 +598,9 @@
     } else if (a === 'man') {
       const no = el.dataset.no, d = pt(no); d.man = d.man === el.dataset.m ? '' : el.dataset.m; recompute(no); save(); const y = window.scrollY; render(); window.scrollTo(0, y);
     } else if (a === 'grp') { GRP = el.dataset.g; render(); window.scrollTo(0, 0); }
+    else if (a === 'showall') { SHOWALL = !SHOWALL; render(); }
+    else if (a === 'po-pick') { pickPO(el.dataset.o); }
+    else if (a === 'po-del') { D.ref.pos = D.ref.pos.filter((x) => x.order !== el.dataset.o); syncPOHeader(); save(); render(); }
     else if (a === 'more') { OPEN[el.dataset.no] = true; render(); }
     else if (a === 'type') { const t = el.dataset.t, l = D.hdr.types, i = l.indexOf(t); if (i >= 0) l.splice(i, 1); else l.push(t); save(); render(); }
     else if (a === 'ph-cam') pickPhotos(el.dataset.ref, true);
@@ -450,11 +637,11 @@
   $('vm-make').addEventListener('click', async () => {
     if (!window.docx || !window.VerslagDocx) { toast('De Word-bibliotheek is niet geladen (internet nodig). Probeer opnieuw.'); return; }
     const dv = derive();
-    if (dv.cnt.open === 27 && !confirm('Er is nog geen enkel checklistpunt beoordeeld. Toch een verslag maken?')) return;
-    if (dv.cnt.open > 0 && dv.cnt.open < 27 && !confirm(dv.cnt.open + ' punt(en) zijn nog niet beoordeeld en komen als "niet beoordeeld" in het verslag. Doorgaan?')) return;
+    if (dv.cnt.open === dv.total && !confirm('Er is nog geen enkel checklistpunt beoordeeld. Toch een verslag maken?')) return;
+    if (dv.cnt.open > 0 && dv.cnt.open < dv.total && !confirm(dv.cnt.open + ' punt(en) zijn nog niet beoordeeld en komen als "niet beoordeeld" in het verslag. Doorgaan?')) return;
     const btn = $('vm-make'); btn.disabled = true; toast('Verslag wordt opgemaakt…');
     try {
-      const blob = await VerslagDocx.build(D, dv, { POINTS, DECISIONS, ROLES, CHECKS, unconfirmed });
+      const blob = await VerslagDocx.build(D, dv, { POINTS, DECISIONS, ROLES, CHECKS, unconfirmed, inScope, narrative, projDesc });
       download(blob, 'Verslag_' + safeName(D.hdr.supplier) + '_' + D.hdr.date + '.docx'); toast('Verslag gedownload');
     } catch (err) { console.error(err); toast('Verslag maken mislukt: ' + (err && err.message || err)); }
     btn.disabled = false;
@@ -466,5 +653,6 @@
   (async function boot() {
     try { const d = await kvGet('draft'); if (d && d.hdr && d.pts) D = Object.assign(blank(), d); } catch (e) { /* geen opslag beschikbaar */ }
     render();
+    loadExp();
   })();
 })();

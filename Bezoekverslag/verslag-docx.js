@@ -29,7 +29,8 @@
     const d = window.docx;
     const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, BorderStyle,
       ImageRun, Header, Footer, AlignmentType, PageNumber, VerticalAlign, TableLayoutType } = d;
-    const H = D.hdr;
+    const H = D.hdr, P = (D.ref && D.ref.pos) || [];
+    const uniq = (a) => Array.from(new Set(a.filter(Boolean))).join(', ');
 
     /* ── bouwstenen ─────────────────────────────────────────────────────── */
     const run = (t, o) => new TextRun(Object.assign({ text: String(t == null ? '' : t), font: FONT, size: 20 }, o || {}));
@@ -114,7 +115,9 @@
     blocks.push(kv([
       ['Onderwerp', 'Field Expediting Checklist V2.1' + (types ? ' — ' + types : '')],
       ['Leverancier / IHC Unit', H.supplier], ['Locatie', H.location], ['Datum', dateNl(H.date)],
-      ['Project / Yard no.', H.project], ['PO / Delivery ref.', H.po],
+      ['Project / Yard no.', H.project + (P.length && ctx.projDesc && ctx.projDesc(P[0]) ? ' – ' + ctx.projDesc(P[0]) : '')],
+      ['PO / Delivery ref.', H.po + (P.length ? ' (' + P.reduce((n, x) => n + x.lines.length, 0) + ' PO-regels, zie bijlage B)' : '')],
+      ['Buyer', uniq(P.map((x) => x.buyer))], ['Technical Coordinator', uniq(P.map((x) => x.tc))],
       ['Field Expediter', H.expediter], ['Vertegenwoordiger leverancier', H.rep], ['Opdrachtgever (Client)', H.client],
       ['Aanwezig', H.present], ['Status', H.status]
     ]));
@@ -169,7 +172,8 @@
     ]));
 
     /* ── 6 samenvatting (optioneel) ─────────────────────────────────────── */
-    if (H.summary) { blocks.push(h1(sec('Samenvatting'))); blocks.push(para(H.summary)); }
+    blocks.push(h1(sec('Samenvatting')));
+    (ctx.narrative ? ctx.narrative(dv) : [H.summary || '']).forEach((t) => blocks.push(para(t, { after: 140 })));
 
     /* ── 7 fotobijlage ──────────────────────────────────────────────────── */
     blocks.push(h1(sec('Fotobijlage')));
@@ -201,11 +205,24 @@
     /* ── bijlage: volledige auditmatrix ─────────────────────────────────── */
     blocks.push(new Paragraph({ pageBreakBefore: true, spacing: { after: 110 }, children: [run('Bijlage A — Audit matrix', { bold: true, color: RED, size: 28 })] }));
     blocks.push(grid(['#', 'Audit area', 'Audit point', 'Cat.', 'Status', 'Pts', 'Evidence / remarks'],
-      ctx.POINTS.map((p) => {
+      ctx.POINTS.filter((p) => !ctx.inScope || ctx.inScope(p.no)).map((p) => {   // punten buiten de scope van het bezoektype weglaten
         const x = D.pts[p.no] || {}; const st = x.st || '';
         const miss = st === 'O' && ctx.unconfirmed ? ctx.unconfirmed(p.no) : [];
         return [String(p.no), p.area, p.text, p.cat, STATUS_TXT[st], PTS[st], [x.remark || '', miss.length ? 'Niet bevestigd: ' + miss.join('; ') : ''].filter(Boolean).join('\n')];
       }), [450, 1500, 3000, 800, 1050, 450, 2388], 15));
+
+    /* ── bijlage B: gekoppelde PO-regels (referentiekader) ───────────────── */
+    if (P.length) {
+      blocks.push(new Paragraph({ pageBreakBefore: true, spacing: { after: 110 }, children: [run('Bijlage B — PO-regels (referentie)', { bold: true, color: RED, size: 28 })] }));
+      if (D.ref.source) blocks.push(para('Bron: bedrijfsbrede expeditinglijst d.d. ' + dateNl(D.ref.source) + '.', { run: { size: 16, color: '595959' } }));
+      const dd = (v) => { const t = String(v || ''); if (!/^\d{4}-\d{2}-\d{2}/.test(t)) return t; const d = /T/.test(t) ? new Date(t) : new Date(t.slice(0, 10) + 'T12:00:00'); if (isNaN(d)) return t; const z = (k) => String(k).padStart(2, '0'); return z(d.getDate()) + '-' + z(d.getMonth() + 1) + '-' + d.getFullYear(); };
+      P.forEach((x) => {
+        blocks.push(h2('PO ' + x.order + ' · ' + x.supplier));
+        blocks.push(grid(['Regel', 'Part No', 'Omschrijving', 'Unified Ref.', 'Qty', 'Planned delivery', 'Status'],
+          x.lines.map((l) => [l.line + '-' + l.rel, l.part, l.desc, l.uref, l.qty + (l.uom ? ' ' + l.uom : ''), dd(l.planned), l.status]),
+          [650, 1350, 3000, 1450, 800, 1250, 1138], 15));
+      });
+    }
 
     /* ── document ───────────────────────────────────────────────────────── */
     const doc = new Document({
