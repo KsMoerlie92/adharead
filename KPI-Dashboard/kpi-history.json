@@ -7113,5 +7113,411 @@
         }
       }
     }
+  },
+  {
+    "meetmoment": {
+      "label": "2026-11-02",
+      "date": "2026-11-02",
+      "filename": "Bedrijfsbreed Expediten 02-11-2026.xlsx",
+      "rows": 7535,
+      "rowsTotaal": 8916,
+      "uitgesloten": 640,
+      "warnings": [
+        "741 regel(s) buiten YN/EN-projecten weggelaten (niet onze scheepsprojecten).",
+        "640 regel(s) uitgesloten van de KPI's (Line No én Release No = 1, of Part No begint met X)."
+      ]
+    },
+    "aggregate": {
+      "total": 7535,
+      "kpis": {
+        "urgent_expediting_pct": 21.2,
+        "avg_delay": 156.1,
+        "critical_delay": 43.5,
+        "not_yet_expedited": 56.4,
+        "not_confirmed_pct": 36.9,
+        "stale_admin_pct": 3.9,
+        "schedule_adherence": null,
+        "field_visits": null,
+        "ncr": null,
+        "_counts": {
+          "totaal": 7535,
+          "geleverd": 10,
+          "open": 7525,
+          "expediteerbaar": 4453,
+          "niet_bevestigd": 2777,
+          "admin_open": 295
+        }
+      }
+    },
+    "subprojects": {
+      "EN10000": {
+        "description": "Eng. and Components MCHD 6000 yd3",
+        "total": 460,
+        "kpis": {
+          "urgent_expediting_pct": 39.2,
+          "avg_delay": 234.5,
+          "critical_delay": 82.7,
+          "not_yet_expedited": 17.6,
+          "not_confirmed_pct": 42.8,
+          "stale_admin_pct": 1.7,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 460,
+            "geleverd": 0,
+            "open": 460,
+            "expediteerbaar": 255,
+            "niet_bevestigd": 197,
+            "admin_open": 8
+          }
+        }
+      },
+      "EN10002": {
+        "description": "Customized Beagle 8 Mk2",
+        "total": 1240,
+        "kpis": {
+          "urgent_expediting_pct": 47,
+          "avg_delay": 142.7,
+          "critical_delay": 54.2,
+          "not_yet_expedited": 61.5,
+          "not_confirmed_pct": 32.8,
+          "stale_admin_pct": 8.1,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 1240,
+            "geleverd": 0,
+            "open": 1240,
+            "expediteerbaar": 732,
+            "niet_bevestigd": 407,
+            "admin_open": 101
+          }
+        }
+      },
+      "YN1316": {
+        "description": "Easy Dredge 2700",
+        "total": 14,
+        "kpis": {
+          "urgent_expediting_pct": null,
+          "avg_delay": null,
+          "critical_delay": null,
+          "not_yet_expedited": null,
+          "not_confirmed_pct": 100,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 14,
+            "geleverd": 0,
+            "open": 14,
+            "expediteerbaar": 0,
+            "niet_bevestigd": 14,
+            "admin_open": 0
+          }
+        }
+      },
+      "YN1317": {
+        "description": "156 - TSHD 31.000 m3, Boskalis",
+        "total": 9,
+        "kpis": {
+          "urgent_expediting_pct": null,
+          "avg_delay": null,
+          "critical_delay": null,
+          "not_yet_expedited": null,
+          "not_confirmed_pct": 77.8,
+          "stale_admin_pct": 22.2,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 9,
+            "geleverd": 0,
+            "open": 9,
+            "expediteerbaar": 0,
+            "niet_bevestigd": 7,
+            "admin_open": 2
+          }
+        }
+      },
+      "YN1318": {
+        "description": "156 - TSHD 2.300 m3, De Boer (kopie Lesse)",
+        "total": 75,
+        "kpis": {
+          "urgent_expediting_pct": 100,
+          "avg_delay": 267,
+          "critical_delay": 60,
+          "not_yet_expedited": 100,
+          "not_confirmed_pct": 93.3,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 75,
+            "geleverd": 0,
+            "open": 75,
+            "expediteerbaar": 5,
+            "niet_bevestigd": 70,
+            "admin_open": 0
+          }
+        }
+      },
+      "YN1319": {
+        "description": "IHC Beagle 8 Mk2",
+        "total": 676,
+        "kpis": {
+          "urgent_expediting_pct": 50,
+          "avg_delay": 38.1,
+          "critical_delay": 5.7,
+          "not_yet_expedited": 78,
+          "not_confirmed_pct": 8.1,
+          "stale_admin_pct": 2.7,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 676,
+            "geleverd": 8,
+            "open": 668,
+            "expediteerbaar": 596,
+            "niet_bevestigd": 54,
+            "admin_open": 18
+          }
+        }
+      },
+      "YN1320": {
+        "description": "YN1320 - Cable layer Vessel",
+        "total": 1467,
+        "kpis": {
+          "urgent_expediting_pct": 2.5,
+          "avg_delay": 44.8,
+          "critical_delay": 38.3,
+          "not_yet_expedited": 16.9,
+          "not_confirmed_pct": 26.4,
+          "stale_admin_pct": 3.4,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 1467,
+            "geleverd": 0,
+            "open": 1467,
+            "expediteerbaar": 1029,
+            "niet_bevestigd": 388,
+            "admin_open": 50
+          }
+        }
+      },
+      "YN1321": {
+        "description": "YN1321 - Cable layer Vessel",
+        "total": 2226,
+        "kpis": {
+          "urgent_expediting_pct": 8.2,
+          "avg_delay": 229.6,
+          "critical_delay": 48,
+          "not_yet_expedited": 78.6,
+          "not_confirmed_pct": 32.3,
+          "stale_admin_pct": 1.2,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 2226,
+            "geleverd": 0,
+            "open": 2226,
+            "expediteerbaar": 1479,
+            "niet_bevestigd": 720,
+            "admin_open": 27
+          }
+        }
+      },
+      "YN1323": {
+        "description": "Easydredge 2700 XL",
+        "total": 730,
+        "kpis": {
+          "urgent_expediting_pct": 9.8,
+          "avg_delay": 91,
+          "critical_delay": 77.6,
+          "not_yet_expedited": 28.7,
+          "not_confirmed_pct": 72.6,
+          "stale_admin_pct": 7.8,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 730,
+            "geleverd": 0,
+            "open": 730,
+            "expediteerbaar": 143,
+            "niet_bevestigd": 530,
+            "admin_open": 57
+          }
+        }
+      },
+      "YN1324": {
+        "description": "156 - TSHD 9.000 m3, Boskalis 1",
+        "total": 326,
+        "kpis": {
+          "urgent_expediting_pct": 0,
+          "avg_delay": 85,
+          "critical_delay": 1.2,
+          "not_yet_expedited": 100,
+          "not_confirmed_pct": 74.8,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 326,
+            "geleverd": 0,
+            "open": 326,
+            "expediteerbaar": 82,
+            "niet_bevestigd": 244,
+            "admin_open": 0
+          }
+        }
+      },
+      "YN1325": {
+        "description": "156 - TSHD 9.000 m3, Boskalis 2",
+        "total": 134,
+        "kpis": {
+          "urgent_expediting_pct": 0,
+          "avg_delay": null,
+          "critical_delay": 0,
+          "not_yet_expedited": 100,
+          "not_confirmed_pct": 67.9,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 134,
+            "geleverd": 0,
+            "open": 134,
+            "expediteerbaar": 43,
+            "niet_bevestigd": 91,
+            "admin_open": 0
+          }
+        }
+      },
+      "YN15058": {
+        "description": "Kenmare 1",
+        "total": 1,
+        "kpis": {
+          "urgent_expediting_pct": null,
+          "avg_delay": null,
+          "critical_delay": null,
+          "not_yet_expedited": null,
+          "not_confirmed_pct": 100,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 1,
+            "geleverd": 0,
+            "open": 1,
+            "expediteerbaar": 0,
+            "niet_bevestigd": 1,
+            "admin_open": 0
+          }
+        }
+      },
+      "YN15059": {
+        "description": "Kenmare 2",
+        "total": 1,
+        "kpis": {
+          "urgent_expediting_pct": null,
+          "avg_delay": null,
+          "critical_delay": null,
+          "not_yet_expedited": null,
+          "not_confirmed_pct": 100,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 1,
+            "geleverd": 0,
+            "open": 1,
+            "expediteerbaar": 0,
+            "niet_bevestigd": 1,
+            "admin_open": 0
+          }
+        }
+      },
+      "YN15060": {
+        "description": "APC Salt Harvester project",
+        "total": 21,
+        "kpis": {
+          "urgent_expediting_pct": 100,
+          "avg_delay": 64.2,
+          "critical_delay": 33.3,
+          "not_yet_expedited": 100,
+          "not_confirmed_pct": 0,
+          "stale_admin_pct": 14.3,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 21,
+            "geleverd": 0,
+            "open": 21,
+            "expediteerbaar": 18,
+            "niet_bevestigd": 0,
+            "admin_open": 3
+          }
+        }
+      },
+      "YN15061": {
+        "description": "QIT Madagascar E-CSD 5000kVA",
+        "total": 150,
+        "kpis": {
+          "urgent_expediting_pct": 21.4,
+          "avg_delay": 184.5,
+          "critical_delay": 100,
+          "not_yet_expedited": 34.3,
+          "not_confirmed_pct": 33.6,
+          "stale_admin_pct": 19.5,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 150,
+            "geleverd": 1,
+            "open": 149,
+            "expediteerbaar": 70,
+            "niet_bevestigd": 50,
+            "admin_open": 29
+          }
+        }
+      },
+      "YN15062": {
+        "description": "CSD B3525 Quarzwerke",
+        "total": 5,
+        "kpis": {
+          "urgent_expediting_pct": 100,
+          "avg_delay": 11,
+          "critical_delay": 0,
+          "not_yet_expedited": 100,
+          "not_confirmed_pct": 75,
+          "stale_admin_pct": 0,
+          "schedule_adherence": null,
+          "field_visits": null,
+          "ncr": null,
+          "_counts": {
+            "totaal": 5,
+            "geleverd": 1,
+            "open": 4,
+            "expediteerbaar": 1,
+            "niet_bevestigd": 3,
+            "admin_open": 0
+          }
+        }
+      }
+    }
   }
 ]
