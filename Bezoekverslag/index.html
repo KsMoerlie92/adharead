@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal IHC — Bezoekverslag</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<link rel="stylesheet" href="verslag.css">
+</head>
+<body>
+<script src="../shared/site-gate.js"></script>
+
+<div class="vm">
+  <header class="vm-head">
+    <h1>Bezoekverslag</h1>
+    <p>Leg tijdens het leveranciersbezoek de Field Expediting Checklist vast. Tik de punten aan, voeg foto's toe en maak daarna het verslag. Alles wordt automatisch op dit apparaat bewaard.</p>
+  </header>
+
+  <nav class="vm-tabs" id="vm-tabs" aria-label="Onderdelen"></nav>
+
+  <main id="vm-main"></main>
+</div>
+
+<div class="vm-bar" id="vm-bar">
+  <div class="vm-bar-info" id="vm-bar-info"></div>
+  <button type="button" class="vm-btn vm-btn-ghost" id="vm-more" aria-label="Meer">⋯</button>
+  <button type="button" class="vm-btn vm-btn-red" id="vm-make">📄 Verslag maken</button>
+</div>
+
+<div class="vm-menu" id="vm-menu" hidden>
+  <button type="button" data-act="save-json">💾 Concept opslaan als bestand</button>
+  <button type="button" data-act="load-json">📂 Concept laden uit bestand</button>
+  <button type="button" data-act="new">🗑️ Nieuw verslag beginnen</button>
+</div>
+<input type="file" id="vm-load-file" accept=".json,application/json" hidden>
+<div class="vm-toast" id="vm-toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="verslag.js"></script>
+<script src="verslag-docx.js"></script>
+<script src="../shared/shared.js"></script>
+</body>
+</html>
