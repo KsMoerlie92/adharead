@@ -189,26 +189,25 @@
     /* ── 8 ondertekening ────────────────────────────────────────────────── */
     blocks.push(h1(sec('Ondertekening')));
     const sigRows = ctx.ROLES.map((role, i) => {
-      const s = D.sign[i];
+      const s = D.sign[i], kn = i < ctx.ROLES.length - 1;
       const sigCell = s.sig
-        ? [new Paragraph({ children: [new ImageRun({ data: bytes(s.sig), transformation: { width: 150, height: Math.round(150 * 110 / 340) || 48 }, type: 'png' })] })]
-        : [cp('')];
+        ? [new Paragraph({ keepNext: kn, children: [new ImageRun({ data: bytes(s.sig), transformation: (function () { const w0 = s.sigW || 340, h0 = s.sigH || 110, k = Math.min(170 / w0, 62 / h0); return { width: Math.round(w0 * k), height: Math.round(h0 * k) }; })(), type: 'png' })] })]
+        : [cp('', { keepNext: kn })];
       return new TableRow({ cantSplit: true, height: { value: 700, rule: d.HeightRule.ATLEAST }, children: [
-        cell(cp(role, { run: { bold: true } }), { w: 2700, fill: PINK }), cell(cp(s.name), { w: 2400 }), cell(sigCell, { w: 2638 }), cell(cp(dateNl(s.date)), { w: 1900 })
+        cell(cp(role, { run: { bold: true }, keepNext: kn }), { w: 2700, fill: PINK }), cell(cp(s.name, { keepNext: kn }), { w: 2400 }), cell(sigCell, { w: 2638 }), cell(cp(dateNl(s.date), { keepNext: kn }), { w: 1900 })
       ] });
     });
     blocks.push(table([new TableRow({ tableHeader: true, children: [
-      cell(cp('Rol', { run: { bold: true, size: 18 } }), { w: 2700, fill: GREY }), cell(cp('Naam', { run: { bold: true, size: 18 } }), { w: 2400, fill: GREY }),
-      cell(cp('Handtekening', { run: { bold: true, size: 18 } }), { w: 2638, fill: GREY }), cell(cp('Datum', { run: { bold: true, size: 18 } }), { w: 1900, fill: GREY })
+      cell(cp('Rol', { run: { bold: true, size: 18 }, keepNext: true }), { w: 2700, fill: GREY }), cell(cp('Naam', { run: { bold: true, size: 18 }, keepNext: true }), { w: 2400, fill: GREY }),
+      cell(cp('Handtekening', { run: { bold: true, size: 18 }, keepNext: true }), { w: 2638, fill: GREY }), cell(cp('Datum', { run: { bold: true, size: 18 }, keepNext: true }), { w: 1900, fill: GREY })
     ] })].concat(sigRows), [2700, 2400, 2638, 1900]));
 
     /* ── bijlage: volledige auditmatrix ─────────────────────────────────── */
     blocks.push(new Paragraph({ pageBreakBefore: true, spacing: { after: 110 }, children: [run('Bijlage A — Audit matrix', { bold: true, color: RED, size: 28 })] }));
     blocks.push(grid(['#', 'Audit area', 'Audit point', 'Cat.', 'Status', 'Pts', 'Evidence / remarks'],
       ctx.POINTS.filter((p) => !ctx.inScope || ctx.inScope(p.no)).map((p) => {   // punten buiten de scope van het bezoektype weglaten
-        const x = D.pts[p.no] || {}; const st = x.st || '';
-        const miss = st === 'O' && ctx.unconfirmed ? ctx.unconfirmed(p.no) : [];
-        return [String(p.no), p.area, p.text, p.cat, STATUS_TXT[st], PTS[st], [x.remark || '', miss.length ? 'Niet bevestigd: ' + miss.join('; ') : ''].filter(Boolean).join('\n')];
+        const mi = ctx.matrixInfo(p.no, dv), st = mi.st || '';
+        return [String(p.no), p.area, p.text, p.cat, STATUS_TXT[st], PTS[st], mi.remark];
       }), [450, 1500, 3000, 800, 1050, 450, 2388], 15));
 
     /* ── bijlage B: gekoppelde PO-regels (referentiekader) ───────────────── */

@@ -157,3 +157,19 @@ canvas.vm-sig{width:100%;height:110px;background:#fff;border:1px solid var(--v-l
 /* samenvatting */
 .vm-narr{background:var(--v-card2);border-radius:10px;padding:.2rem .9rem;margin-bottom:.8rem;font-size:.95rem;line-height:1.5}
 .vm-narr p{margin:.6rem 0}
+
+/* ondertekening */
+.vm-sigbox{all:unset;box-sizing:border-box;display:grid;place-items:center;width:100%;min-height:120px;margin-top:.35rem;border:2px dashed var(--v-line);border-radius:12px;background:#fff;color:#5b6b85;font:600 1rem Barlow,Arial,sans-serif;cursor:pointer;padding:.5rem}
+.vm-sigbox.has{border-style:solid}
+.vm-sigbox img{max-width:100%;max-height:110px;display:block}
+.vm-sigpad{position:fixed;inset:0;z-index:100000;background:#fff;display:flex;flex-direction:column;color:#0a1628;font-family:Barlow,Arial,sans-serif}
+.vm-sigpad-top{padding:calc(.6rem + env(safe-area-inset-top)) 1rem .5rem;border-bottom:2px solid #E60012}
+.vm-sigpad-top b{display:block;font-size:1.05rem}
+.vm-sigpad-top small{color:#5b6b85;font-size:.85rem}
+.vm-sigpad-area{position:relative;flex:1;min-height:0;touch-action:none}
+.vm-sigpad-area canvas{position:absolute;inset:0;touch-action:none;display:block;cursor:crosshair}
+.vm-sigpad-line{position:absolute;left:6%;right:6%;bottom:22%;border-bottom:2px solid #d3dae6;pointer-events:none}
+.vm-sigpad-ph{position:absolute;left:6%;bottom:calc(22% + 8px);color:#b8c2d3;font-size:1.1rem;pointer-events:none}
+.vm-sigpad-bar{display:flex;gap:.5rem;padding:.6rem .8rem calc(.6rem + env(safe-area-inset-bottom));border-top:1px solid #d3dae6;background:#f6f8fc}
+.vm-sigpad-bar .vm-btn{flex:1;color:#0a1628;background:#fff;border-color:#d3dae6}
+.vm-sigpad-bar .vm-btn-red{color:#fff;background:#E60012;border-color:#E60012;flex:1.4}

@@ -98,6 +98,33 @@
     'Follow-up': [1, 11, 14, 21, 22, 23, 26]
   };
   const TYPE_NL = { 'Milestone': 'milestone-bezoek', 'Logistics inspection': 'logistieke inspectie', 'FAT': 'FAT', 'Audit': 'audit', 'Follow-up': 'follow-up-bezoek' };
+  // Vinkjes die al ergens anders worden geborgd: niet meer tonen en niet meetellen (geen dubbele borging).
+  const REMOVED = {
+    3: ['Aligned with IFS'],                                   // → #24 IFS change history
+    7: ['Packaging', 'Labeling', 'Handling'],                  // → #18 verpakking, #19 labels
+    10: ['Evidence'],                                          // → #21 bewijsfoto's
+    14: ['Evidence attached'],                                 // → foto's bij de bevindingen
+    17: ['Packages traceable'],                                // → #19 package identification
+    21: ['Photos of packaging', 'Photos of labels', 'Photos of defects', 'Photos retrievable'],  // → foto's bij #18/#19/bevindingen; verslag
+    25: ['Labels consistent', 'Logistics terms consistent'],   // → #19, #7
+    26: ['Blocking issues closed', 'FAT approval complete']    // → bevindingenregister, #15
+  };
+  const NOTES = {
+    3: 'Afstemming met IFS: zie #24.', 7: 'Packaging en handling: zie #18; labeling: zie #19.', 10: 'Bewijs: zie #21.',
+    14: 'Bewijs: foto\'s bij de bevindingen.', 17: 'Pakketidentificatie: zie #19.', 21: 'Foto\'s van verpakking, labels en afwijkingen: bij #18, #19 en de bevindingen.',
+    25: 'Labels: zie #19; logistieke afspraken: zie #7.', 26: 'Blokkerende issues: zie bevindingenregister; FAT-afronding: zie #15.'
+  };
+  // Punten die de tool zelf invult (niet aan te tikken): #1 uit Bezoek, #23 uit het bevindingenregister, #27 uit Vrijgave.
+  const AUTO_PTS = [1, 23, 27];
+  // Rondgang bij een logistieke inspectie (volgorde van de inspectie ter plaatse).
+  const ROUTE_LOGI = [
+    { id: 'l-doc', title: 'Gegevens & documenten', icon: '🗂️', pts: [12, 6, 7, 22, 25] },
+    { id: 'l-scope', title: 'Scope & aantallen', icon: '🧩', pts: [16, 17] },
+    { id: 'l-pack', title: 'Verpakking', icon: '📦', pts: [18] },
+    { id: 'l-label', title: 'Labels', icon: '🏷️', pts: [19] },
+    { id: 'l-qual', title: 'Kwaliteit & FAT-afronding', icon: '🔍', pts: [15, 20] },
+    { id: 'l-end', title: 'Afronding', icon: '✅', pts: [21, 26] }
+  ];
   const VISIT_TYPES = ['Milestone', 'Logistics inspection', 'FAT', 'Audit', 'Follow-up'];
   const STATUSES = [['C', 'C', 'Compliant'], ['O', 'O', 'Observation'], ['NC', 'NC', 'Non-conf.'], ['NA', 'N/A', 'n.v.t.']];
   const PTS = { C: 1, O: 0.5, NC: 0 };
@@ -135,35 +162,87 @@
   /* ── afgeleide gegevens: score, bevindingen, advies ─────────────────────── */
   function pt(no) { return D.pts[no] || (D.pts[no] = { st: '', checks: [], man: '', remark: '', owner: '', due: '', fstatus: 'Open', approval: '', blocking: false }); }
 
-  // Status volgt uit de vinkjes: alles bevestigd = C, deels = O; "afwijking"/"n.v.t." overrulen.
-  function recompute(no) {
-    const d = pt(no), n = (CHECKS[no] || []).length, t = (d.checks || []).length;
-    d.st = d.man || (n && t >= n ? 'C' : t > 0 ? 'O' : '');
+  // Gevaarlijke stoffen (ADN) in de gekoppelde PO-regels — zelfde trefwoorden als de DG Overview (shared/dg-rules.js).
+  function dgHits() {
+    const R = window.DG_RULES || {}, out = [];
+    (D.ref && D.ref.pos || []).forEach((po) => po.lines.forEach((l) => {
+      const desc = String(l.desc || '').toLowerCase(); if (!desc) return;
+      for (const cat in R) {
+        // alleen categorieën die vervoersplichtig gevaarlijk zijn (IMDG-klasse/UN-nummer of gas onder druk),
+        // niet bv. cyberresilience, IHM of werkplaatsmiddelen
+        if (!/IMDG|UN \d{4}|H280/.test(R[cat].regulations || '')) continue;
+        if ((R[cat].keywords || []).some((k) => desc.indexOf(String(k).toLowerCase()) >= 0)) {
+          out.push({ order: po.order, line: l.line + '-' + l.rel, desc: l.desc, cat: cat.replace(/^[^A-Za-z]*\d+\.\s*/, '') }); break;
+        }
+      }
+    }));
+    return out;
   }
-  const unconfirmed = (no) => { const d = D.pts[no] || {}; return (CHECKS[no] || []).filter((c, i) => (d.checks || []).indexOf(i) < 0); };
+  // ADN-vinkje alleen tonen als er gevaarlijke stoffen in de PO-regels zitten (of als er nog geen PO is gekoppeld).
+  const adnNeeded = () => !(D.ref && D.ref.pos && D.ref.pos.length) || dgHits().length > 0;
+  // Indexen (in CHECKS) van de vinkjes die getoond en meegeteld worden
+  function visIdx(no) {
+    const rm = REMOVED[no] || [];
+    return (CHECKS[no] || []).map((c, i) => i).filter((i) => {
+      const c = CHECKS[no][i];
+      if (rm.indexOf(c) >= 0) return false;
+      if (+no === 7 && c === 'ADN requirements' && !adnNeeded()) return false;
+      return true;
+    });
+  }
+  // Status volgt uit de getoonde vinkjes: alles bevestigd = C, deels = O; "afwijking"/"n.v.t." overrulen.
+  function recompute(no) {
+    const d = pt(no), V = visIdx(no), t = V.filter((i) => (d.checks || []).indexOf(i) >= 0).length;
+    d.st = d.man || (V.length && t >= V.length ? 'C' : t > 0 ? 'O' : '');
+  }
+  const unconfirmed = (no) => { const d = D.pts[no] || {}; return visIdx(no).filter((i) => (d.checks || []).indexOf(i) < 0).map((i) => CHECKS[no][i]); };
+  const isAuto = (no) => AUTO_PTS.indexOf(+no) >= 0;
+
+  // Automatisch bepaalde punten: [onderdeel, in orde?]
+  function autoChecks(no, findings) {
+    const H = D.hdr, R = D.rel;
+    if (+no === 1) return [['Visit scope (type bezoek)', H.types.length > 0], ['Objectives', !!tv(H.goal) || H.types.length > 0],
+      ['Requirements (PO gekoppeld)', !!(D.ref && D.ref.pos && D.ref.pos.length) || !!tv(H.po)], ['Participants', !!tv(H.present)]];
+    if (+no === 23) return [['Each finding registered once', true], ['Ownership', findings.every((f) => !!tv(f.owner))],
+      ['Closure', true], ['Approval', findings.every((f) => f.fstatus !== 'Closed' || !!tv(f.approval))]];
+    if (+no === 27) {
+      if (!R.decision) return [];
+      return [['Decision recorded', true], ['Owner', !!tv(R.owner)], ['Conditions', R.decision === 'GO' || !!tv(R.conditions)],
+        ['Open issues', true], ['Dossier reference', !!tv(R.ref)]];
+    }
+    return [];
+  }
+  function autoStatus(no, findings) {
+    const c = autoChecks(no, findings); if (!c.length) return { st: '', checks: c };
+    const ok = c.filter((x) => x[1]).length;
+    return { st: ok === c.length ? 'C' : ok ? 'O' : '', checks: c };
+  }
 
   function derive() {
     let sum = 0, n = 0, total = 0; const cnt = { C: 0, O: 0, NC: 0, NA: 0, open: 0 };
-    POINTS.forEach((p) => {
-      if (!inScope(p.no)) return;
-      total++;
-      const s = (D.pts[p.no] || {}).st;
-      if (!s) { cnt.open++; return; }
-      cnt[s]++;
-      if (s in PTS) { sum += PTS[s]; n++; }
-    });
-    const score = n ? Math.round(sum / n * 1000) / 10 : 0;
-    const cls = !n ? '–' : score >= 95 ? 'A - Release Ready' : score >= 85 ? 'B - Minor Findings' : score >= 70 ? 'C - Conditional Release' : 'D - No Release';
+    // status van aangetikte punten opnieuw bepalen (de getoonde vinkjes kunnen wijzigen, bv. ADN na het koppelen van een PO)
+    POINTS.forEach((p) => { const d = D.pts[p.no]; if (!isAuto(p.no) && d && Array.isArray(d.checks) && (d.checks.length || d.man)) recompute(p.no); });
     const findings = [];
     POINTS.forEach((p) => {
+      if (isAuto(p.no)) return;
       const d = D.pts[p.no]; if (!d || (d.st !== 'O' && d.st !== 'NC')) return;
       findings.push({ kind: 'pt', key: p.no, ptNo: p.no, type: d.st === 'NC' ? 'NCR' : 'OBS', text: d.remark, owner: d.owner, due: d.due, fstatus: d.fstatus || 'Open', approval: d.approval, blocking: !!d.blocking && d.st === 'NC', ref: 'p' + p.no });
     });
     D.extra.forEach((x) => findings.push({ kind: 'x', key: x.id, ptNo: x.point ? +x.point : null, type: x.type, text: x.text, owner: x.owner, due: x.due, fstatus: x.fstatus || 'Open', approval: x.approval, blocking: !!x.blocking && x.type === 'NCR', ref: 'x' + x.id }));
     findings.forEach((f, i) => { f.fid = 'F-' + String(i + 1).padStart(2, '0'); });
+    const auto = {};
+    POINTS.forEach((p) => {
+      if (!inScope(p.no)) return;
+      let s;
+      if (isAuto(p.no)) { auto[p.no] = autoStatus(p.no, findings); s = auto[p.no].st; }
+      else { total++; s = (D.pts[p.no] || {}).st; if (!s) { cnt.open++; return; } cnt[s]++; }
+      if (s in PTS) { sum += PTS[s]; n++; }
+    });
+    const score = n ? Math.round(sum / n * 1000) / 10 : 0;
+    const cls = !n ? '–' : score >= 95 ? 'A - Release Ready' : score >= 85 ? 'B - Minor Findings' : score >= 70 ? 'C - Conditional Release' : 'D - No Release';
     const blocking = findings.some((f) => f.blocking && f.fstatus !== 'Closed');
     const suggestion = blocking || cls.startsWith('D') ? 'NOGO' : cls.startsWith('A') ? 'GO' : n ? 'CONDITIONAL' : '';
-    return { score, cls, cnt, scored: n, total, findings, blocking, suggestion };
+    return { score, cls, cnt, scored: n, total, findings, blocking, suggestion, auto };
   }
 
   /* ── opslag (IndexedDB) ─────────────────────────────────────────────────── */
@@ -320,8 +399,8 @@
     out.push(p1);
 
     const parts = [];
-    GROUPS.forEach((g) => {
-      const pts = g.pts.filter((no) => inScope(no) && (D.pts[no] || {}).st); if (!pts.length) return;
+    routeGroups().forEach((g) => {
+      const pts = g.pts.filter((no) => !isAuto(no) && inScope(no) && (D.pts[no] || {}).st); if (!pts.length) return;
       const c = { C: 0, O: 0, NC: 0, NA: 0 }; pts.forEach((no) => { c[D.pts[no].st]++; });
       const areas = Array.from(new Set(pts.map((no) => POINTS[no - 1].area)));
       const res = [];
@@ -336,6 +415,10 @@
       if (dv.cnt.open) p2 += ' ' + capital(nWord(dv.cnt.open, 'punt', 'punten')) + ' binnen de scope van dit bezoek ' + (dv.cnt.open === 1 ? 'is' : 'zijn') + ' niet beoordeeld.';
       out.push(p2);
     } else out.push('Er zijn nog geen punten van de checklist beoordeeld.');
+    if (inScope(7) && D.ref && D.ref.pos && D.ref.pos.length) {
+      const dg = dgHits();
+      if (dg.length) out.push('De gekoppelde PO-regels bevatten gevaarlijke stoffen (' + joinNl(Array.from(new Set(dg.map((x) => x.cat.toLowerCase())))) + '); daarom zijn ook de ADN-eisen gecontroleerd.');
+    }
 
     if (!dv.findings.length) out.push('Er zijn geen afwijkingen vastgesteld.');
     else {
@@ -415,24 +498,31 @@
       '</div></section>' +
       '<button type="button" class="vm-btn vm-btn-teal" data-tab="checklist" style="width:100%">Naar de checklist →</button>';
   }
+  function adnNote() {
+    if (!(D.ref && D.ref.pos && D.ref.pos.length)) return '<p class="vm-hint" style="margin:.7rem 0 0">Koppel op het tabblad Bezoek een PO; dan wordt bepaald of er gevaarlijke stoffen (ADN) in de PO-regels zitten.</p>';
+    const H = dgHits();
+    if (!H.length) return '<p class="vm-hint" style="margin:.7rem 0 0">✓ Geen gevaarlijke stoffen in de gekoppelde PO-regels — ADN is niet van toepassing.</p>';
+    return '<p class="vm-warn">⚠️ Gevaarlijke stoffen in de PO-regels: ' + H.slice(0, 5).map((x) => esc(x.line + ' ' + x.desc) + ' (' + esc(x.cat) + ')').join('; ') + (H.length > 5 ? ' … (+' + (H.length - 5) + ')' : '') + '. Bevestig de ADN-eisen.</p>';
+  }
   const STATE_ICO = { C: '✓', O: '!', NC: '✕', NA: '–', '': '' };
   const STATE_TXT = { C: 'Compliant', O: 'Observation', NC: 'Non-conformity', NA: 'N/A', '': 'Nog niet beoordeeld' };
-  const visPts = (g) => g.pts.filter((no) => SHOWALL || inScope(no));
-  const visGroups = () => GROUPS.filter((g) => visPts(g).length);
+  const routeGroups = () => (D.hdr.types.length === 1 && D.hdr.types[0] === 'Logistics inspection' && !SHOWALL ? ROUTE_LOGI : GROUPS);
+  const visPts = (g) => g.pts.filter((no) => !isAuto(no) && (SHOWALL || inScope(no)));
+  const visGroups = () => routeGroups().filter((g) => visPts(g).length);
   const grpProg = (g) => { let done = 0; visPts(g).forEach((no) => { if ((D.pts[no] || {}).st) done++; }); return done; };
 
   function tileHtml(p, dv) {
     const d = D.pts[p.no] || {}; const st = d.st || '', open = !!OPEN[p.no];
-    const chk = CHECKS[p.no] || [], ticked = (d.checks || []).length;
+    const V = visIdx(p.no), ticked = V.filter((i) => (d.checks || []).indexOf(i) >= 0).length;
     let h = '<section class="vm-card vm-tile' + (st ? ' s-' + st : '') + (open ? ' open' : '') + (inScope(p.no) ? '' : ' out') + '" id="pt-' + p.no + '">' +
       '<button type="button" class="vm-tile-head" data-act="tile" data-no="' + p.no + '" aria-expanded="' + open + '">' +
       '<span class="vm-tile-ico">' + STATE_ICO[st] + '</span>' +
       '<span class="vm-tile-main"><span class="vm-pt-top"><span class="vm-pt-no">#' + p.no + '</span><span>' + p.area + '</span><span class="vm-pt-cat">' + p.cat + '</span>' + (inScope(p.no) ? '' : '<span class="vm-pt-cat">buiten scope</span>') + '</span>' +
       '<span class="vm-pt-text">' + esc(p.text) + '</span></span>' +
-      '<span class="vm-tile-prog">' + (st === 'NA' ? 'n.v.t.' : st === 'NC' ? 'NC' : ticked + '/' + chk.length) + '</span></button>';
+      '<span class="vm-tile-prog">' + (st === 'NA' ? 'n.v.t.' : st === 'NC' ? 'NC' : ticked + '/' + V.length) + '</span></button>';
     if (open) {
-      h += '<div class="vm-tile-body"><div class="vm-q">Bevestig ter plaatse</div><div class="vm-chks">' +
-        chk.map((c, i) => '<button type="button" class="vm-chk' + ((d.checks || []).indexOf(i) >= 0 ? ' on' : '') + '" data-act="chk" data-no="' + p.no + '" data-i="' + i + '"><span class="box">✓</span><span>' + esc(c) + '</span></button>').join('') +
+      h += '<div class="vm-tile-body">' + (+p.no === 7 ? adnNote() : '') + '<div class="vm-q">Bevestig ter plaatse</div><div class="vm-chks">' +
+        V.map((i) => [CHECKS[p.no][i], i]).map(([c, i]) => '<button type="button" class="vm-chk' + ((d.checks || []).indexOf(i) >= 0 ? ' on' : '') + '" data-act="chk" data-no="' + p.no + '" data-i="' + i + '"><span class="box">✓</span><span>' + esc(c) + '</span></button>').join('') +
         '</div><div class="vm-quick">' +
         '<button type="button" class="vm-btn vm-btn-sm" data-act="all" data-no="' + p.no + '">✓ Alles in orde</button>' +
         '<button type="button" class="vm-btn vm-btn-sm' + (d.man === 'NC' ? ' on-nc' : '') + '" data-act="man" data-no="' + p.no + '" data-m="NC">✕ Afwijking (NC)</button>' +
@@ -456,7 +546,7 @@
 
   function viewChecklist() {
     const dv = derive(), G = visGroups();
-    if (!G.some((g) => g.id === GRP)) GRP = (G[0] || GROUPS[0]).id;
+    if (!G.some((g) => g.id === GRP)) GRP = (G[0] || routeGroups()[0]).id;
     const gi = Math.max(0, G.findIndex((g) => g.id === GRP)), g = G[gi], sc = scopeSet();
     const scopeBar = '<div class="vm-scope">' + (sc
       ? '<span>Type bezoek: <b>' + D.hdr.types.join(' + ') + '</b> — ' + sc.size + ' van 27 punten van toepassing.</span>'
@@ -525,37 +615,119 @@
       fld('Release decision owner / date', 'rel.owner', r.owner) + fld('Final release reference / dossier', 'rel.ref', r.ref) + '</div></section>' +
       '<section class="vm-card"><h2>Samenvatting voor het verslag</h2><p class="vm-hint" style="margin:0 0 .5rem">Wordt automatisch opgebouwd uit het bezoek, de checklist, de bevindingen en het vrijgavebesluit.</p>' +
       '<div class="vm-narr" id="vm-narr">' + narrHtml() + '</div>' +
-      fld('Eigen aanvulling (optioneel, komt achter de samenvatting)', 'hdr.summary', D.hdr.summary, { full: true, area: true }) + '</section>';
+      fld('Eigen aanvulling (optioneel, komt achter de samenvatting)', 'hdr.summary', D.hdr.summary, { full: true, area: true }) + '</section>' +
+      '<button type="button" class="vm-btn vm-btn-teal" data-tab="teken" style="width:100%">Naar ondertekening →</button>';
   }
 
   function viewTeken() {
-    return '<section class="vm-card"><h2>Sign-off</h2><div class="vm-grid">' + ROLES.map((role, i) => {
+    const dv = derive(), dec = DECISIONS.find((d) => d[0] === D.rel.decision);
+    let h = '<section class="vm-card"><h2>Ondertekening</h2>' +
+      '<p class="vm-hint" style="margin:0 0 .6rem">Door te ondertekenen bevestigen de bezoeker en de vertegenwoordiger van de leverancier dat zij overeenstemming hebben over de bevindingen, de actiepunten en het vrijgavebesluit in dit verslag.</p>' +
+      '<div class="vm-score">' +
+      '<div class="vm-kpi"><b>' + (dv.total - dv.cnt.open) + '/' + dv.total + '</b><span>Punten beoordeeld</span></div>' +
+      '<div class="vm-kpi"><b>' + dv.findings.length + '</b><span>Bevindingen' + (dv.blocking ? ' · blokkerend' : '') + '</span></div>' +
+      '<div class="vm-kpi"><b>' + (dv.scored ? pct(dv.score) : '–') + '</b><span>Audit score</span></div>' +
+      '<div class="vm-kpi"><b style="font-size:1.05rem;line-height:1.7">' + (dec ? dec[1] : '–') + '</b><span>Vrijgave</span></div></div>' +
+      (dv.cnt.open ? '<p class="vm-warn">Nog ' + nWord(dv.cnt.open, 'punt', 'punten') + ' niet beoordeeld. Rond eerst de checklist af voordat er getekend wordt.</p>' : '') +
+      (!dec ? '<p class="vm-warn">Er is nog geen vrijgavebesluit vastgelegd (tabblad Vrijgave).</p>' : '') + '</section>';
+    h += ROLES.map((role, i) => {
       const s = D.sign[i];
-      return '<div class="full" style="border-top:1px solid var(--v-line);padding-top:.7rem"><b>' + role + '</b><div class="vm-row">' + fld('Naam', 'sign.' + i + '.name', s.name) + fld('Datum', 'sign.' + i + '.date', s.date, { type: 'date' }) + '</div>' +
-        '<label class="f">Handtekening (optioneel)</label><canvas class="vm-sig" data-sig="' + i + '"></canvas>' +
-        '<div class="vm-row"><button type="button" class="vm-btn vm-btn-sm" data-act="sig-clear" data-i="' + i + '">Wissen</button></div></div>';
-    }).join('') + '</div></section>';
+      return '<section class="vm-card"><h2 style="font-size:1.1rem">' + role + '</h2><div class="vm-row">' + fld('Naam', 'sign.' + i + '.name', s.name) + fld('Datum', 'sign.' + i + '.date', s.date, { type: 'date' }) + '</div>' +
+        '<label class="f" style="margin-top:.6rem">Handtekening</label>' +
+        '<button type="button" class="vm-sigbox' + (s.sig ? ' has' : '') + '" data-act="sig-open" data-i="' + i + '">' +
+        (s.sig ? '<img src="' + s.sig + '" alt="Handtekening ' + esc(role) + '">' : '<span>✍️ Tik hier om te tekenen</span>') + '</button>' +
+        (s.sig ? '<div class="vm-row"><button type="button" class="vm-btn vm-btn-sm" data-act="sig-open" data-i="' + i + '">Opnieuw tekenen</button><button type="button" class="vm-btn vm-btn-sm" data-act="sig-clear" data-i="' + i + '">Wissen</button></div>' : '') +
+        '</section>';
+    }).join('');
+    return h;
   }
 
   const VIEWS = { bezoek: viewBezoek, checklist: viewChecklist, bevind: viewBevind, fotos: viewFotos, vrijgave: viewVrijgave, teken: viewTeken };
   function render() {
     tabs(); $('vm-main').innerHTML = VIEWS[TAB](); updateBar();
-    if (TAB === 'teken') initSigs();
   }
 
-  /* ── handtekeningen ─────────────────────────────────────────────────────── */
-  function initSigs() {
-    document.querySelectorAll('canvas.vm-sig').forEach((cv) => {
-      const i = +cv.dataset.sig, dpr = window.devicePixelRatio || 1;
-      cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
-      const g = cv.getContext('2d'); g.scale(dpr, dpr); g.lineWidth = 2.2; g.lineCap = 'round'; g.strokeStyle = '#0a1628';
-      if (D.sign[i].sig) { const im = new Image(); im.onload = () => g.drawImage(im, 0, 0, cv.clientWidth, cv.clientHeight); im.src = D.sign[i].sig; }
-      let drawing = false;
-      const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-      cv.addEventListener('pointerdown', (e) => { drawing = true; cv.setPointerCapture(e.pointerId); const p = pos(e); g.beginPath(); g.moveTo(p[0], p[1]); e.preventDefault(); });
-      cv.addEventListener('pointermove', (e) => { if (!drawing) return; const p = pos(e); g.lineTo(p[0], p[1]); g.stroke(); });
-      const end = () => { if (!drawing) return; drawing = false; D.sign[i].sig = cv.toDataURL('image/png'); save(); };
-      cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  /* ── handtekening: volledig scherm, hele vlak om te tekenen ─────────────── */
+  function openSigPad(i) {
+    const role = ROLES[i], s = D.sign[i];
+    const ov = document.createElement('div');
+    ov.className = 'vm-sigpad';
+    ov.innerHTML = '<div class="vm-sigpad-top"><div><b>' + esc(role) + (s.name ? ' — ' + esc(s.name) : '') + '</b><small>Teken met je vinger of pen in het witte vlak</small></div></div>' +
+      '<div class="vm-sigpad-area"><canvas></canvas><div class="vm-sigpad-line"></div><span class="vm-sigpad-ph">Teken hier</span></div>' +
+      '<div class="vm-sigpad-bar"><button type="button" class="vm-btn" data-sp="clear">Wissen</button><button type="button" class="vm-btn" data-sp="cancel">Annuleren</button><button type="button" class="vm-btn vm-btn-red" data-sp="ok">✓ Bevestigen</button></div>';
+    document.body.appendChild(ov);
+    document.body.style.overflow = 'hidden';
+    try { if (ov.requestFullscreen && window.matchMedia('(pointer: coarse)').matches) ov.requestFullscreen().catch(() => {}); } catch (e) { /* niet ondersteund */ }
+
+    const area = ov.querySelector('.vm-sigpad-area'), cv = ov.querySelector('canvas'), ph = ov.querySelector('.vm-sigpad-ph');
+    const g = cv.getContext('2d');
+    let strokes = [], cur = null, cw = 0, ch = 0;
+    function fit() {
+      const r = area.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      const ow = cw;
+      cw = r.width; ch = r.height;
+      if (ow && ow !== cw) { const k = cw / ow; strokes.forEach((st) => st.forEach((p) => { p[0] *= k; p[1] *= k; })); }
+      cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+      cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      redraw();
+    }
+    function drawStroke(st) {
+      g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#0a1628'; g.lineWidth = Math.max(2.5, Math.min(cw, ch) / 120);
+      g.beginPath(); g.moveTo(st[0][0], st[0][1]);
+      if (st.length === 1) { g.lineTo(st[0][0] + 0.1, st[0][1] + 0.1); }
+      for (let k = 1; k < st.length - 1; k++) { const mx = (st[k][0] + st[k + 1][0]) / 2, my = (st[k][1] + st[k + 1][1]) / 2; g.quadraticCurveTo(st[k][0], st[k][1], mx, my); }
+      if (st.length > 1) { const L = st[st.length - 1]; g.lineTo(L[0], L[1]); }
+      g.stroke();
+    }
+    function redraw() { g.clearRect(0, 0, cw, ch); strokes.forEach(drawStroke); ph.style.display = strokes.length ? 'none' : ''; }
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('pointerdown', (e) => { e.preventDefault(); cv.setPointerCapture(e.pointerId); cur = [pos(e)]; strokes.push(cur); ph.style.display = 'none'; redraw(); });
+    cv.addEventListener('pointermove', (e) => {
+      if (!cur) return; e.preventDefault();
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      evs.forEach((ev) => cur.push(pos(ev)));
+      redraw();
+    });
+    const end = () => { cur = null; };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    const onResize = () => fit();
+    window.addEventListener('resize', onResize);
+    requestAnimationFrame(fit);
+
+    function close() {
+      window.removeEventListener('resize', onResize);
+      try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* */ }
+      document.body.style.overflow = '';
+      ov.remove();
+    }
+    // Bijsnijden tot de getekende lijnen (+ marge), zodat de handtekening netjes in het verslag past
+    function exportSig() {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      strokes.forEach((st) => st.forEach((p) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }));
+      const m = 12; x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(cw, x1 + m); y1 = Math.min(ch, y1 + m);
+      const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0), sc = Math.min(2, 900 / w);
+      const out = document.createElement('canvas'); out.width = Math.round(w * sc); out.height = Math.round(h * sc);
+      const o = out.getContext('2d'); o.setTransform(sc, 0, 0, sc, -x0 * sc, -y0 * sc);
+      const keep = g; strokes.forEach((st) => {
+        o.lineCap = 'round'; o.lineJoin = 'round'; o.strokeStyle = '#0a1628'; o.lineWidth = Math.max(2.5, Math.min(cw, ch) / 120);
+        o.beginPath(); o.moveTo(st[0][0], st[0][1]); if (st.length === 1) o.lineTo(st[0][0] + 0.1, st[0][1] + 0.1);
+        for (let k = 1; k < st.length - 1; k++) { const mx = (st[k][0] + st[k + 1][0]) / 2, my = (st[k][1] + st[k + 1][1]) / 2; o.quadraticCurveTo(st[k][0], st[k][1], mx, my); }
+        if (st.length > 1) { const L = st[st.length - 1]; o.lineTo(L[0], L[1]); }
+        o.stroke();
+      });
+      void keep;
+      return { data: out.toDataURL('image/png'), w: out.width, h: out.height };
+    }
+    ov.addEventListener('click', (e) => {
+      const a = e.target.dataset && e.target.dataset.sp; if (!a) return;
+      if (a === 'clear') { strokes = []; redraw(); }
+      else if (a === 'cancel') close();
+      else if (a === 'ok') {
+        if (!strokes.length) { toast('Er is nog niets getekend.'); return; }
+        const r = exportSig(); s.sig = r.data; s.sigW = r.w; s.sigH = r.h;
+        save(); close(); render(); toast('Handtekening opgeslagen');
+      }
     });
   }
 
@@ -594,7 +766,7 @@
       if (d.man === 'NA') d.man = '';
       recompute(no); save(); const y = window.scrollY; render(); window.scrollTo(0, y);
     } else if (a === 'all') {
-      const no = el.dataset.no, d = pt(no); d.checks = (CHECKS[no] || []).map((c, i) => i); d.man = ''; recompute(no); save(); const y = window.scrollY; render(); window.scrollTo(0, y);
+      const no = el.dataset.no, d = pt(no); d.checks = visIdx(no); d.man = ''; recompute(no); save(); const y = window.scrollY; render(); window.scrollTo(0, y);
     } else if (a === 'man') {
       const no = el.dataset.no, d = pt(no); d.man = d.man === el.dataset.m ? '' : el.dataset.m; recompute(no); save(); const y = window.scrollY; render(); window.scrollTo(0, y);
     } else if (a === 'grp') { GRP = el.dataset.g; render(); window.scrollTo(0, 0); }
@@ -609,8 +781,9 @@
     else if (a === 'x-add') { D.extra.push({ id: uid(), text: '', type: 'OBS', point: '', owner: '', due: '', fstatus: 'Open', approval: '', blocking: false }); save(); render(); }
     else if (a === 'x-del') { if (confirm('Deze bevinding en haar foto\'s verwijderen?')) { D.extra = D.extra.filter((x) => x.id !== el.dataset.id); D.photos = D.photos.filter((p) => p.ref !== 'x' + el.dataset.id); save(); render(); } }
     else if (a === 'dec') { D.rel.decision = D.rel.decision === el.dataset.d ? '' : el.dataset.d; save(); render(); }
-    else if (a === 'goto') { const no = +el.dataset.no; TAB = 'checklist'; GRP = (GROUPS.find((x) => x.pts.indexOf(no) >= 0) || GROUPS[0]).id; OPEN[no] = true; render(); const t = $('pt-' + no); if (t) t.scrollIntoView({ block: 'start' }); }
-    else if (a === 'sig-clear') { D.sign[+el.dataset.i].sig = ''; save(); render(); }
+    else if (a === 'goto') { const no = +el.dataset.no; TAB = 'checklist'; GRP = (visGroups().find((x) => x.pts.indexOf(no) >= 0) || visGroups()[0] || GROUPS[0]).id; OPEN[no] = true; render(); const t = $('pt-' + no); if (t) t.scrollIntoView({ block: 'start' }); }
+    else if (a === 'sig-clear') { const sg = D.sign[+el.dataset.i]; sg.sig = ''; sg.sigW = 0; sg.sigH = 0; save(); render(); }
+    else if (a === 'sig-open') openSigPad(+el.dataset.i);
   });
 
   /* ── onderbalk: menu, verslag, concept opslaan/laden ────────────────────── */
@@ -641,12 +814,25 @@
     if (dv.cnt.open > 0 && dv.cnt.open < dv.total && !confirm(dv.cnt.open + ' punt(en) zijn nog niet beoordeeld en komen als "niet beoordeeld" in het verslag. Doorgaan?')) return;
     const btn = $('vm-make'); btn.disabled = true; toast('Verslag wordt opgemaakt…');
     try {
-      const blob = await VerslagDocx.build(D, dv, { POINTS, DECISIONS, ROLES, CHECKS, unconfirmed, inScope, narrative, projDesc });
+      const blob = await VerslagDocx.build(D, dv, { POINTS, DECISIONS, ROLES, CHECKS, unconfirmed, inScope, narrative, projDesc, matrixInfo });
       download(blob, 'Verslag_' + safeName(D.hdr.supplier) + '_' + D.hdr.date + '.docx'); toast('Verslag gedownload');
     } catch (err) { console.error(err); toast('Verslag maken mislukt: ' + (err && err.message || err)); }
     btn.disabled = false;
   });
 
+  // Voor de auditmatrix in het verslag: status + toelichting per punt
+  function matrixInfo(no, dv) {
+    dv = dv || derive();
+    if (isAuto(no)) {
+      const a = dv.auto[no] || autoStatus(no, dv.findings);
+      const miss = a.checks.filter((x) => !x[1]).map((x) => x[0]);
+      return { st: a.st, remark: 'Automatisch bepaald' + (+no === 1 ? ' uit de bezoekgegevens' : +no === 23 ? ' uit het bevindingenregister' : ' uit het vrijgavebesluit') + (miss.length ? '. Ontbreekt: ' + miss.join('; ') : '') + '.' };
+    }
+    const x = D.pts[no] || {}, st = x.st || '', miss = st === 'O' ? unconfirmed(no) : [];
+    const parts = [x.remark || '', miss.length ? 'Niet bevestigd: ' + miss.join('; ') : '', NOTES[no] || ''];
+    if (+no === 7 && D.ref && D.ref.pos && D.ref.pos.length) { const h = dgHits(); parts.push(h.length ? 'Gevaarlijke stoffen in PO-regels: ' + h.map((q) => q.line + ' (' + q.cat + ')').join(', ') + '.' : 'Geen gevaarlijke stoffen in de PO-regels; ADN n.v.t.'); }
+    return { st, remark: parts.filter(Boolean).join('\n') };
+  }
   window.VM = { POINTS, derive, get data() { return D; } };
 
   /* ── start ──────────────────────────────────────────────────────────────── */
