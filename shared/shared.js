@@ -16,6 +16,7 @@
       { href: '../PO-Matcher/',          icon: '🔍', title: 'Expediting Tool',    sub: 'Expediting- vs. moederlijst & late items' },
       { href: '../Expediting-Mailer/',   icon: '✉️', title: 'Expediting Mailer',  sub: 'Stel expediting-mails op per order' },
       { href: '../KPI-Dashboard/',       icon: '📊', title: 'Dashboard',          sub: 'KPI-cijfers per Sub Project ID' },
+      { href: '../Bezoekverslag/',       icon: '🧾', title: 'Bezoekverslag',      sub: 'Leveranciersbezoek vastleggen & verslag maken' },
       { href: '../Large-Item-Overview/', icon: '🏗️', title: 'Large Item Overview', sub: 'Large items, late items & FAT — bedrijfsbreed' },
     ]},
     { label: 'Logistics', items: [
