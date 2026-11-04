@@ -24,7 +24,7 @@
     [4, 'Scope & Configuration', 'Confirm the latest Item List covers the complete supplier scope.', 'Material'],
     [5, 'Scope & Configuration', 'Reconcile PO and engineering scope with the Item List; flag gaps.', 'Material'],
     [6, 'Logistics Readiness', 'Verify mandatory logistics data is complete.', 'Material'],
-    [7, 'Logistics Readiness', 'Confirm packaging, labeling, handling, transport, Incoterm, address and ADN requirements.', 'Method'],
+    [7, 'Logistics Readiness', 'Confirm transport, Incoterm, address and ADN requirements.', 'Method'],
     [8, 'FAT & Quality', 'Confirm FAT scope, protocol, participants, timing, resources and records.', 'Method'],
     [9, 'Documentation', 'Define the document package and transfer route to Document Control.', 'Method'],
     [10, 'Inspection Governance', 'Assign inspection class, matrix, scope, sampling, criteria and evidence.', 'Method'],
@@ -118,7 +118,7 @@
   const AUTO_PTS = [1, 23, 27];
   // Rondgang bij een logistieke inspectie (volgorde van de inspectie ter plaatse).
   const ROUTE_LOGI = [
-    { id: 'l-doc', title: 'Gegevens & documenten', icon: '🗂️', pts: [12, 6, 7, 22, 25] },
+    { id: 'l-doc', title: 'Voorbereiding bezoek', icon: '🗂️', pts: [12, 6, 7, 22, 25] },
     { id: 'l-scope', title: 'Scope & aantallen', icon: '🧩', pts: [16, 17] },
     { id: 'l-pack', title: 'Verpakking', icon: '📦', pts: [18] },
     { id: 'l-label', title: 'Labels', icon: '🏷️', pts: [19] },
