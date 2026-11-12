@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transportaanvraag Shipping</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">Royal <b>IHC</b></span>
+      <span class="brand-title">Transportaanvraag | Shipping</span>
+    </div>
+    <div id="status" class="status status-bad" role="status" aria-live="polite">❌ Formulier incompleet</div>
+  </header>
+
+  <div class="layout">
+    <aside class="side" id="side">
+      <section class="profile" aria-label="Routeprofiel">
+        <h2>Routeprofiel</h2>
+        <div id="chips" class="chips"></div>
+        <h3>Extra vereist voor deze zending</h3>
+        <ul id="extras" class="extras"></ul>
+        <div id="warnings" class="warnings"></div>
+      </section>
+      <nav aria-label="Secties">
+        <h2>Secties</h2>
+        <ol id="nav" class="nav"></ol>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="note-top">
+        Beantwoord eerst de <b>hoofdvragen</b>. Daarna verschijnen automatisch de secties en vragen die bij uw zending horen.
+        Velden met <span class="req">*</span> zijn verplicht. Verstuur het formulier alleen naar Shipping als alles volledig is ingevuld;
+        zonder volledig formulier wordt er geen transport geregeld.
+      </div>
+
+      <form id="form" novalidate autocomplete="off"></form>
+
+      <section class="card actions" id="actions">
+        <h2>Afronden</h2>
+        <div id="missing" class="missing" hidden></div>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btnCheck">Controleer formulier</button>
+          <button type="button" class="btn btn-primary" id="btnMail" disabled>Mail naar Shipping</button>
+          <button type="button" class="btn" id="btnCopy">Kopieer samenvatting</button>
+          <button type="button" class="btn" id="btnTxt">Download samenvatting (.txt)</button>
+          <button type="button" class="btn" id="btnJson">Download gegevens (.json)</button>
+          <button type="button" class="btn" id="btnPrint">Print / PDF</button>
+          <button type="button" class="btn btn-ghost" id="btnReset">Formulier wissen</button>
+        </div>
+        <p class="small muted" id="actionMsg" aria-live="polite"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
