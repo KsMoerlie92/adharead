@@ -114,12 +114,25 @@
   // Bouw het commit-bestand (compacte arrays) uit een rauwe tabel { headers, rows(objecten) }.
   // De rawTable is al door ExpeditingCore gefilterd (YN/EN + geen X-parts); hier
   // filteren we defensief nogmaals zodat een handmatig samengestelde tabel ook schoon is.
+  // Kolommen die op POSITIE (Excel-letter) in de bedrijfsbrede lijst worden
+  // meegenomen, ongeacht hun kopnaam. Gebruikt door de Template-Generator
+  // (AE → Value pc, AG → Value total, AS → Hs-code, AT → Country of origin,
+  // AV → Weight gross). De bijbehorende kopnamen gaan mee in meta.colLetters.
+  const LETTER_COLS = { AE:30, AG:32, AS:44, AT:45, AV:47 };
+  function letterColNames(headers){
+    const out = {};
+    Object.keys(LETTER_COLS).forEach(L => { const h = headers[LETTER_COLS[L]]; if (h != null && !/^__COL_/.test(h)) out[L] = h; });
+    return out;
+  }
   function buildCommitJSON(rawTable, metaObj){
     const src = _filter(rawTable);
-    const headers = src.headers.filter(h => KEEP_COLS.includes(h) || EXTRA_COLS.test(String(h)));
+    const colLetters = letterColNames(src.headers);
+    const byLetter = Object.values(colLetters);
+    const headers = src.headers.filter(h => KEEP_COLS.includes(h) || EXTRA_COLS.test(String(h)) || byLetter.includes(h));
+    metaObj = Object.assign({}, metaObj||{}, { colLetters });
     const rows = src.rows.map(o => headers.map(h => { const v=o[h]; return v instanceof Date ? v.toISOString() : (v==null?'':v); }));
     return JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length }, metaObj||{}), headers, rows });
   }
 
-  global.ExpeditingData = { save, load, loadRaw, meta, clear, loadLocal, loadRawLocal, metaLocal, buildCommitJSON };
+  global.ExpeditingData = { save, load, loadRaw, meta, clear, loadLocal, loadRawLocal, metaLocal, buildCommitJSON, letterColNames };
 })(window);
