@@ -37,6 +37,38 @@
     'Inspection Level',
   ];
 
+  // ── Unit of measure → keuzelijst van de template (Master!C: Piece(s), Bucket(s),
+  //    Meter, Set(s), Kilogram). Onbekende eenheden blijven ongewijzigd staan, zodat
+  //    de Validator ze later zichtbaar afkeurt i.p.v. dat er stil iets verkeerds staat.
+  const UOM_MAP = [
+    [/^(pcs?|pce|pieces?|piece\(s\)|stuks?|st)\.?$/i, 'Piece(s)'],
+    [/^(buckets?|bucket\(s\)|bkt|emmers?)\.?$/i,        'Bucket(s)'],
+    [/^(m|mtr|meters?|metre)\.?$/i,                       'Meter'],
+    [/^(sets?|set\(s\))\.?$/i,                          'Set(s)'],
+    [/^(kg|kgs|kilo|kilograms?)\.?$/i,                    'Kilogram'],
+  ];
+  function normUom(v) {
+    const t = trim(v);
+    if (!t) return '';
+    const hit = UOM_MAP.find(([re]) => re.test(t));
+    return hit ? hit[1] : t;
+  }
+
+  // ── Extra velden uit de bedrijfsbrede Expediting-lijst (kolommen AS t/m AV) ──
+  //    Alleen invullen als er in de Expediting-lijst iets staat; '0' bij
+  //    gewicht telt als leeg (IFS vult 0 als het onbekend is).
+  const num0 = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) && n !== 0; };
+  function fillFromExpediting(out, r) {
+    const C = ExpeditingCore.COLS;
+    const hs = trim(r[C.customs]);                       // AS · Customs Stat No (HS-code)
+    if (hs) out['Hs-code'] = hs;
+    const coo = trim(r[C.origin]);                       // AT · Country of Origin
+    if (coo) out['Country of origin'] = coo.toUpperCase();
+    const totW = r[C.totW], netW = r[C.netW];            // AU · Net Weight / AV · Total Net Weight (kg)
+    if (num0(totW)) out['Weight nett (collo)'] = trim(totW);
+    else if (num0(netW)) out['Weight nett (collo)'] = trim(netW);
+  }
+
   // ── State ────────────────────────────────────────────────────────────
   let expRows = [];          // alle Expediting-regels voor de opgezochte PO
   let selected = new Set();  // indices in expRows die geselecteerd zijn
@@ -80,8 +112,9 @@
     out['Item'] = item;
     out['Item description'] = trim(r[C.desc]);
     out['Quantity'] = trim(r[C.qty]);
-    out['Unit of measure'] = trim(r[C.uom] || r['Purch UoM']);
+    out['Unit of measure'] = normUom(r[C.uom] || r['Purch UoM']);
     out['Supplier'] = trim(r[C.supplier]);
+    fillFromExpediting(out, r);
     // Leverancier met "IHC" in de naam: Part No alvast voorinvullen in Serial number
     // (Serial number wordt later toch voor partnummers gebruikt).
     if (/ihc/i.test(out['Supplier'])) out['Serial number'] = trim(r[C.part] || r['Part No']);
@@ -103,7 +136,7 @@
     out['Item'] = `L${it.lineNo}-${it.releaseNo}`;
     out['Item description'] = it.description;
     out['Quantity'] = it.qty || '1';
-    out['Unit of measure'] = it.uom || 'pcs';
+    out['Unit of measure'] = normUom(it.uom) || 'Piece(s)';
     // Nieuw onderdeel: het systeemnummer IS meteen ook het Mark/Label
     // (consistent met hoe deze nummers elders al in kolom H verschijnen).
     out['Component (Mark/Label)'] = it.itemNo;
@@ -141,6 +174,7 @@
 
   window.TemplateGenerator = {
     IL_COLS,
+    normUom,
     searchPO,
     buildTemplateRows,
     buildShareLink,

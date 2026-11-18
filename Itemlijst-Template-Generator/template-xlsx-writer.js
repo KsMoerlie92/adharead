@@ -129,7 +129,8 @@
         const m = sheet.match(re);
         if (!m) { notFound.push(cellRef); return; }
         const attrs = m[1].replace(/\st="[^"]*"/, '');
-        const isNumeric = /^-?\d+([.,]\d+)?$/.test(val);
+        // Hs-code altijd als tekst: anders verdwijnt een voorloopnul (bv. 03…).
+        const isNumeric = h !== 'Hs-code' && /^-?\d+([.,]\d+)?$/.test(val);
         const replacement = isNumeric
           ? `<c r="${cellRef}"${attrs}><v>${xesc(val.replace(',', '.'))}</v></c>`
           : `<c r="${cellRef}"${attrs} t="inlineStr"><is><t xml:space="preserve">${xesc(val)}</t></is></c>`;

@@ -43,7 +43,7 @@
           <input type="checkbox" data-i="${i}" class="tg-check" ${checked}>
           <span class="tg-col tg-col-line">${esc(lineNo)}-${esc(releaseNo)}</span>
           <span class="tg-col tg-col-desc">${esc(trim(r[C.desc]))}</span>
-          <span class="tg-col tg-col-qty">${esc(trim(r[C.qty]))} ${esc(trim(r[C.uom] || r['Purch UoM']))}</span>
+          <span class="tg-col tg-col-qty">${esc(trim(r[C.qty]))} ${esc(TG.normUom(r[C.uom] || r['Purch UoM']))}</span>
           <span class="tg-col tg-col-supplier">${esc(trim(r[C.supplier]))}</span>
           <span class="tg-col tg-col-mark">${uref ? esc(uref) : '<i>nog geen merk</i>'}</span>
         </label>`;
@@ -119,7 +119,7 @@
     const description = window.prompt('Omschrijving van het nieuwe onderdeel:', '');
     if (description === null || !trim(description)) return;
     const qty = window.prompt('Aantal:', '1') || '1';
-    const uom = window.prompt('Eenheid (bv. pcs, Meter):', 'pcs') || 'pcs';
+    const uom = window.prompt('Eenheid (Piece(s), Bucket(s), Meter, Set(s) of Kilogram):', 'Piece(s)') || 'Piece(s)';
 
     const itemNo = LN.getNext(currentPO, lineNo, releaseNo, key => window.prompt(
       `Nog geen basis-componentnummer bekend voor deze Order-regel (Line ${lineNo}/${releaseNo}).\n` +
