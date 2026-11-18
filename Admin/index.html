@@ -193,9 +193,7 @@ function read(file){
     await ExpeditingData.save(lines,{filename:file.name},rawTable);
     _lastCommitJSON = ExpeditingData.buildCommitJSON(rawTable,{filename:file.name});
     _offerDownload(_lastCommitJSON,'expediting-data.json');
-    const cl=ExpeditingData.letterColNames(rawTable.headers);
-    document.getElementById('msg').innerHTML='Verwerkt ✓ — commit het gedownloade expediting-data.json naar shared/<br>Kolomkoppeling Template-Generator: '+
-      ['AE','AG','AS','AT','AV'].map(L=>L+' = <b>'+ExpeditingCore.esc(cl[L]||'(leeg)')+'</b>').join(' · ');
+    document.getElementById('msg').textContent='Verwerkt ✓ — commit het gedownloade expediting-data.json naar shared/';
     // Optioneel FAT-blad → fat-list.json (fouten hier blokkeren de Result-upload niet)
     const fm=document.getElementById('fatmsg'), fb=document.getElementById('fat-redownload');
     try{

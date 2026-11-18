@@ -54,26 +54,18 @@
     return hit ? hit[1] : t;
   }
 
-  // ── Extra velden uit de bedrijfsbrede Expediting-lijst, gekoppeld op kolomletter ──
-  //    AE → Value pc (EUR) · AG → Value total · AS → Hs-code · AT → Country of origin
-  //    · AV → Weight gross (collo) (Total Net Weight = brutogewicht van de regel).
-  //    Kopnamen komen uit meta.colLetters (gezet door Admin bij het inlezen); bij een
-  //    lokaal ingelezen, ongefilterde lijst rechtstreeks uit de kolompositie.
+  // ── Extra velden uit de bedrijfsbrede Expediting-lijst — gekoppeld op KOPNAAM ──
+  //    Customs Stat No (AS) → Hs-code · Country of Origin (AT) → Country of origin
+  //    · Total Net Weight (AV, = brutogewicht van de regel) → Weight gross (collo).
   //    Alleen invullen als er iets staat; 0 telt als leeg (IFS vult 0 als onbekend).
   const num0 = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) && n !== 0; };
-  let colNames = {};
   function fillFromExpediting(out, r) {
     const C = ExpeditingCore.COLS;
-    const get = L => colNames[L] ? r[colNames[L]] : undefined;
-    const hs = trim(get('AS') ?? r[C.customs]);
+    const hs = trim(r[C.customs]);
     if (hs) out['Hs-code'] = hs;
-    const coo = trim(get('AT') ?? r[C.origin]);
+    const coo = trim(r[C.origin]);
     if (coo) out['Country of origin'] = coo.toUpperCase();
-    const gross = get('AV') ?? r[C.totW];
-    if (num0(gross)) out['Weight gross (collo)'] = trim(gross);
-    const vpc = get('AE'), vtot = get('AG');
-    if (num0(vpc)) out['Value pc (EUR)'] = trim(vpc);
-    if (num0(vtot)) out['Value total'] = trim(vtot);
+    if (num0(r[C.totW])) out['Weight gross (collo)'] = trim(r[C.totW]);
   }
 
   // ── State ────────────────────────────────────────────────────────────
@@ -93,10 +85,6 @@
 
     const POCOL = ExpeditingCore && ExpeditingCore.COLS ? ExpeditingCore.COLS.po : 'Purchase Order No';
     const ORDERCOL = ExpeditingCore && ExpeditingCore.COLS ? ExpeditingCore.COLS.orderNo : 'Order No';
-
-    // Kopnamen van de op letter gekoppelde kolommen (AE, AG, AS, AT, AV)
-    const m = (await ExpeditingData.meta()) || {};
-    colNames = Object.assign({}, (ExpeditingData.letterColNames && raw.headers.length > 47) ? ExpeditingData.letterColNames(raw.headers) : {}, m.colLetters || {});
 
     const matches = raw.rows.filter(r => trim(r[POCOL]) === po || trim(r[ORDERCOL]) === po);
     if (!matches.length) return { rows: [], error: `Geen regels gevonden voor PO ${esc(po)} in de Expediting-lijst.` };
