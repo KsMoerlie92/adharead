@@ -93,7 +93,7 @@
   // sec: 0 = hoofdproject, 1 = gevonden in subproject, 2 = vergelijking
   const COLS = [
     ['part', 'Part No', 0], ['desc', 'Omschrijving', 0], ['sup', 'IHC-leverancier', 0], ['po', 'PO-regel', 0], ['inco', 'Incoterm', 0], ['own', 'Leverdatum', 0],
-    ['oProj', 'Subproject', 1], ['oZek', 'Zekerheid', 1], ['oPo', 'PO-regel', 1], ['oSup', 'Leverancier', 1], ['oInco', 'Incoterm', 1], ['oDate', 'Leverdatum', 1],
+    ['oPo', 'PO-regel', 1], ['oSup', 'Leverancier', 1], ['oInco', 'Incoterm', 1], ['oDate', 'Leverdatum', 1],
     ['dev', 'Afwijking (d)', 2],
   ];
   const SEC_CLS = ['pv-own', 'pv-rel', 'pv-cmp'];
@@ -109,13 +109,13 @@
     const sk = sortKey === 'absDev' ? 'dev' : sortKey;
     const nOwn = COLS.filter(c => c[2] === 0).length, nRel = COLS.filter(c => c[2] === 1).length;
     $('pv-thead').innerHTML =
-      `<tr class="pv-band"><th class="pv-own pv-first" colspan="${nOwn}">Hoofdproject ${esc($('pv-project').value)}</th><th class="pv-rel pv-first" colspan="${nRel}">Gevonden in subproject</th><th class="pv-cmp pv-first">Δ</th></tr>` +
+      `<tr class="pv-band"><th class="pv-own pv-first" colspan="${nOwn}">Hoofdproject ${esc($('pv-project').value)}</th><th class="pv-rel pv-first" colspan="${nRel}">Gevonden in subproject ${esc([...new Set(list.map(o => o.oProj).filter(Boolean))].join(', ') || '—')}</th><th class="pv-cmp pv-first">Δ</th></tr>` +
       '<tr>' + COLS.map(([k, t, sec], i) =>
       `<th data-k="${k}" class="${SEC_CLS[sec]}${i && COLS[i - 1][2] !== sec ? ' pv-first' : ''}">${t}${sk === k ? `<span class="pv-arr">${sortKey === 'absDev' ? '⇅' : (sortDir > 0 ? '▲' : '▼')}</span>` : ''}</th>`).join('') + '</tr>';
     $('pv-tbody').innerHTML = list.length ? list.map(o => `<tr>
       <td class="pv-own pv-strong">${esc(o.part)}</td><td class="pv-own" title="${esc(o.desc)}">${esc(o.desc)}</td><td class="pv-own">${esc(o.sup)}</td><td class="pv-own">${esc(o.po)}</td>
       ${incoCell(o.inco, 'pv-own')}<td class="pv-own pv-strong">${o.own ? dmy(o.own) : '—'}</td>
-      <td class="pv-rel pv-first pv-strong">${esc(o.oProj) || '<span class="pv-muted">geen match</span>'}</td><td class="pv-rel ${o.oZek === 'kandidaat' ? 'pv-cand' : ''}">${esc(o.oZek)}</td><td class="pv-rel">${esc(o.oPo)}</td><td class="pv-rel">${esc(o.oSup)}</td>
+      <td class="pv-rel pv-first" title="${esc(o.oProj)}${o.oZek ? ' (' + esc(o.oZek) + ')' : ''}">${esc(o.oPo) || '<span class="pv-muted">geen match</span>'}</td><td class="pv-rel">${esc(o.oSup)}</td>
       ${o.oProj ? incoCell(o.oInco, 'pv-rel') : '<td class="pv-rel"></td>'}
       <td class="pv-rel pv-strong">${o.oDate ? dmy(o.oDate) + (o.oEst ? ' <span class="pv-muted" title="Geen Planned Delivery Date; Latest Wanted Receipt Date gebruikt">*</span>' : '') : '—'}</td>
       <td class="pv-cmp pv-first pv-num ${o.dev > 0 ? 'pv-late' : o.dev < 0 ? 'pv-early' : ''}">${o.dev == null ? '—' : (o.dev > 0 ? '+' : '') + o.dev}</td></tr>`).join('')
@@ -136,7 +136,7 @@
   function exportXlsx() {
     const list = window._pvList || [];
     const aoa = [COLS.map(c => (c[2] === 0 ? 'Hoofdproject · ' : c[2] === 1 ? 'Subproject · ' : '') + c[1])].concat(list.map(o =>
-      [o.part, o.desc, o.sup, o.po, o.inco, o.own ? dmy(o.own) : '', o.oProj, o.oZek, o.oPo, o.oSup, o.oInco, o.oDate ? dmy(o.oDate) : '', o.dev == null ? '' : o.dev]));
+      [o.part, o.desc, o.sup, o.po, o.inco, o.own ? dmy(o.own) : '', o.oPo, o.oSup, o.oInco, o.oDate ? dmy(o.oDate) : '', o.dev == null ? '' : o.dev]));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Vergelijking');
     XLSX.writeFile(wb, `Partnummer-vergelijking_${$('pv-project').value || 'project'}.xlsx`);
   }
