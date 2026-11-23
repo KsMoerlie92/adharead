@@ -24,6 +24,7 @@
   function keepProject(sub, opts){
     const s = String(sub == null ? '' : sub).trim().toUpperCase();
     if (PROJECT_PREFIXES.some(p => s.startsWith(p))) return true;
+    if (opts && opts.all) return !!s;                       // alle projecten (ook andere organisatie)
     return !!(opts && opts.related) && relatedProjects().has(s);
   }
   // Subprojecten uit shared/project-relations.js (DE…, SH…, SE…, SMIT…).

@@ -131,7 +131,7 @@
       rows = raw ? raw.rows : [];
       const rm = raw && raw.relatedMeta;
       $('pv-src').textContent = rows.length ? `Bedrijfsbrede lijst: stand ${meta && meta.uploaded ? dmy(meta.uploaded) : '?'}` +
-        (rm ? ` · subprojecten-rapportage: ${rm.rows.toLocaleString('nl-NL')} regels, stand ${rm.uploaded ? dmy(rm.uploaded) : '?'}` : ' · nog geen subprojecten-rapportage (Admin → related-data.json)') : 'Geen bedrijfsbrede lijst gevonden.';
+        (rm ? ` · andere projecten (related-data.json): stand ${rm.uploaded ? dmy(rm.uploaded) : '?'}` : ' · nog geen related-data.json (andere projecten) — lees de uitgebreide lijst in via Admin') : 'Geen bedrijfsbrede lijst gevonden.';
     } catch (e) { $('pv-src').textContent = 'Lijst laden mislukt: ' + e.message; }
     fillProjects(); compute();
     $('pv-group').onchange = () => { fillProjects(); compute(); };

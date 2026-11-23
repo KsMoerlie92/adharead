@@ -138,22 +138,23 @@
   // De rawTable is al door ExpeditingCore gefilterd (YN/EN + geen X-parts); hier
   // filteren we defensief nogmaals zodat een handmatig samengestelde tabel ook schoon is.
   function buildCommitJSON(rawTable, metaObj){
-    const src = _filter(rawTable, { related:true });   // YN/EN + subprojecten uit project-relations.js
+    const src = _filter(rawTable);   // alleen YN/EN — andere projecten gaan naar related-data.json
     const headers = src.headers.filter(h => KEEP_COLS.includes(h) || EXTRA_COLS.test(String(h)));
     const rows = src.rows.map(o => headers.map(h => { const v=o[h]; return v instanceof Date ? v.toISOString() : (v==null?'':v); }));
     return JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length }, metaObj||{}), headers, rows });
   }
 
-  // Subprojecten-rapportage → related-data.json: alleen regels van subprojecten uit
-  // project-relations.js die NIET met YN/EN beginnen (die zitten al in expediting-data.json).
+  // Andere projecten (andere organisatie: DE…, SH…, SE…, SMIT… enz.) → related-data.json.
+  // Alle projecten die NIET met YN/EN beginnen; X-parts eruit. Welke ervan bij een
+  // hoofdproject horen bepaalt shared/project-relations.js (bij het lezen).
   function buildRelatedJSON(rawTable, metaObj){
     const prefixes = (global.ExpeditingCore && ExpeditingCore.PROJECT_PREFIXES) || ['YN','EN'];
-    const src = _filter(rawTable, { related:true });
+    const src = _filter(rawTable, { all:true });
     const rowsIn = src.rows.filter(o => { const s=String(o['Sub Project ID']||'').trim().toUpperCase(); return s && !prefixes.some(p=>s.startsWith(p)); });
     const headers = src.headers.filter(h => KEEP_COLS.includes(h) || EXTRA_COLS.test(String(h)));
     const rows = rowsIn.map(o => headers.map(h => { const v=o[h]; return v instanceof Date ? v.toISOString() : (v==null?'':v); }));
     const perProject = {}; rowsIn.forEach(o => { const s=String(o['Sub Project ID']).trim().toUpperCase(); perProject[s]=(perProject[s]||0)+1; });
-    return { json: JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length, perProject }, metaObj||{}), headers, rows }), perProject, rows: rows.length };
+    return { json: JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length, projects: Object.keys(perProject).length }, metaObj||{}), headers, rows }), perProject, rows: rows.length };
   }
 
   global.ExpeditingData = { buildRelatedJSON, save, load, loadRaw, meta, clear, loadLocal, loadRawLocal, metaLocal, buildCommitJSON };
