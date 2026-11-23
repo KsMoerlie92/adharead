@@ -15,13 +15,21 @@
   function day(v) { const d = ExpeditingCore.toDate(v); return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null; }
   const diffDays = (a, b) => (a && b) ? Math.round((a - b) / 86400000) : null;
   const poLine = r => [trim(r['Order No']), trim(r['Line No']), trim(r['Release No'])].filter(Boolean).join('-');
-  const proj = r => trim(r['Sub Project ID']);
+  const proj = r => trim(r['Sub Project ID']).toUpperCase();
   const part = r => trim(r['Part No']);
 
+  const pid = p => trim(typeof p === 'string' ? p : p && p.id).toUpperCase();
+  // Alle projectnummers van een groep: hoofdproject + subprojecten
   function groupProjects(g) {
-    const set = new Set(g.projects.map(trim));
-    set.add(trim(g.parent));
+    const set = new Set([trim(g.parent).toUpperCase()]);
+    g.projects.forEach(p => { if (pid(p)) set.add(pid(p)); });
     return set;
+  }
+  // Info per projectnummer (omschrijving/zekerheid) uit project-relations.js
+  function projInfo(g, id) {
+    if (id === trim(g.parent).toUpperCase()) return { zekerheid: 'hoofdproject', desc: g.name || '' };
+    const p = g.projects.find(x => pid(x) === id);
+    return (p && typeof p === 'object') ? p : { zekerheid: '', desc: '' };
   }
 
   function fillGroups() {
@@ -39,8 +47,9 @@
       return `<option value="${esc(p)}">${esc(p)}${d && d['Sub Project Description'] ? ' · ' + esc(trim(d['Sub Project Description'])) : ''}</option>`;
     }).join('') || '<option value="">— geen projecten uit deze groep in de lijst —</option>';
     const missing = [...groupProjects(g)].filter(p => !present.has(p));
-    $('pv-ginfo').innerHTML = `Groep <b>${esc(g.parent)}</b>: ${[...groupProjects(g)].map(esc).join(', ')}` +
-      (missing.length ? ` <span class="pv-muted">(niet in de lijst: ${missing.map(esc).join(', ')})</span>` : '');
+    $('pv-ginfo').innerHTML = `Hoofdproject <b>${esc(g.parent)}</b> · subprojecten: ${g.projects.map(p => {
+        const i = projInfo(g, pid(p)); return `<span title="${esc(i.desc || '')}${i.bron ? ' — ' + esc(i.bron) : ''}">${esc(pid(p))}${i.zekerheid && i.zekerheid !== 'bevestigd' ? ' <span class="pv-muted">(' + esc(i.zekerheid) + ')</span>' : ''}</span>`; }).join(', ')}` +
+      (missing.length ? `<br><span class="pv-muted">Nog geen regels in de bedrijfsbrede lijst voor: ${missing.map(esc).join(', ')}</span>` : '');
   }
 
   function compute() {
@@ -57,7 +66,7 @@
       const hits = idx.get(part(r)) || [];
       if (!hits.length) {
         if (showNo) result.push({ part: part(r), desc: trim(r['Description']), sup: trim(r['Supplier Name']), po: poLine(r), own,
-          oProj: '', oPo: '', oSup: '', oDate: null, oEst: false, dev: null, absDev: -1 });
+          oProj: '', oZek: '', oPo: '', oSup: '', oDate: null, oEst: false, dev: null, absDev: -1 });
         return;
       }
       hits.forEach(h => {
@@ -65,7 +74,7 @@
         if (!oDate) { oDate = day(h['Latest Wanted Receipt Date']); oEst = !!oDate; }
         const dev = diffDays(oDate, own);
         result.push({ part: part(r), desc: trim(r['Description']), sup: trim(r['Supplier Name']), po: poLine(r), own,
-          oProj: proj(h), oPo: poLine(h), oSup: trim(h['Supplier Name']), oDate, oEst, dev, absDev: dev == null ? -1 : Math.abs(dev) });
+          oProj: proj(h), oZek: projInfo(g, proj(h)).zekerheid || '', oPo: poLine(h), oSup: trim(h['Supplier Name']), oDate, oEst, dev, absDev: dev == null ? -1 : Math.abs(dev) });
       });
     });
     render();
@@ -73,7 +82,7 @@
 
   const COLS = [
     ['part', 'Part No'], ['desc', 'Omschrijving'], ['sup', 'IHC-leverancier'], ['po', 'PO-regel'], ['own', 'Leverdatum project'],
-    ['oProj', 'Gerelateerd project', 1], ['oPo', 'PO-regel', 1], ['oSup', 'Leverancier', 1], ['oDate', 'Leverdatum', 1], ['dev', 'Afwijking (dagen)', 1],
+    ['oProj', 'Gerelateerd project', 1], ['oZek', 'Zekerheid koppeling', 1], ['oPo', 'PO-regel', 1], ['oSup', 'Leverancier', 1], ['oDate', 'Leverdatum', 1], ['dev', 'Afwijking (dagen)', 1],
   ];
   function render() {
     const q = trim($('pv-search').value).toLowerCase().split(/\s+/).filter(Boolean);
@@ -90,10 +99,10 @@
     $('pv-tbody').innerHTML = list.length ? list.map(o => `<tr>
       <td class="pv-strong">${esc(o.part)}</td><td title="${esc(o.desc)}">${esc(o.desc)}</td><td>${esc(o.sup)}</td><td>${esc(o.po)}</td>
       <td>${o.own ? dmy(o.own) : '—'}</td>
-      <td class="pv-strong">${esc(o.oProj) || '<span class="pv-muted">geen match</span>'}</td><td>${esc(o.oPo)}</td><td>${esc(o.oSup)}</td>
+      <td class="pv-strong">${esc(o.oProj) || '<span class="pv-muted">geen match</span>'}</td><td class="${o.oZek === 'kandidaat' ? 'pv-cand' : ''}">${esc(o.oZek)}</td><td>${esc(o.oPo)}</td><td>${esc(o.oSup)}</td>
       <td>${o.oDate ? dmy(o.oDate) + (o.oEst ? ' <span class="pv-muted" title="Geen Planned Delivery Date; Latest Wanted Receipt Date gebruikt">*</span>' : '') : '—'}</td>
       <td class="pv-num ${o.dev > 0 ? 'pv-late' : o.dev < 0 ? 'pv-early' : ''}">${o.dev == null ? '—' : (o.dev > 0 ? '+' : '') + o.dev}</td></tr>`).join('')
-      : `<tr><td colspan="${COLS.length}" class="pv-empty">${GROUPS.length ? 'Geen IHC-regels met hetzelfde Part No in de gerelateerde projecten.' : 'Nog geen projectrelaties gedefinieerd (shared/project-relations.js).'}</td></tr>`;
+      : `<tr><td colspan="${COLS.length}" class="pv-empty">${GROUPS.length ? 'Geen IHC-regels met hetzelfde Part No in de bijbehorende projecten. Staan de subprojecten al in de bedrijfsbrede lijst? (zie hierboven)' : 'Nog geen projectrelaties gedefinieerd (shared/project-relations.js).'}</td></tr>`;
     const parts = new Set(result.filter(o => o.oProj).map(o => o.part)).size;
     const late = result.filter(o => o.dev > 0).length;
     $('pv-sum').innerHTML = `<b>${parts}</b> Part No's met match · <b>${result.filter(o => o.oProj).length}</b> vergelijkingen · <b>${late}</b> later geleverd in gerelateerd project` +
@@ -110,7 +119,7 @@
   function exportXlsx() {
     const list = window._pvList || [];
     const aoa = [COLS.map(c => (c[2] ? 'Gerelateerd · ' : '') + c[1])].concat(list.map(o =>
-      [o.part, o.desc, o.sup, o.po, o.own ? dmy(o.own) : '', o.oProj, o.oPo, o.oSup, o.oDate ? dmy(o.oDate) : '', o.dev == null ? '' : o.dev]));
+      [o.part, o.desc, o.sup, o.po, o.own ? dmy(o.own) : '', o.oProj, o.oZek, o.oPo, o.oSup, o.oDate ? dmy(o.oDate) : '', o.dev == null ? '' : o.dev]));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Vergelijking');
     XLSX.writeFile(wb, `Partnummer-vergelijking_${$('pv-project').value || 'project'}.xlsx`);
   }
@@ -118,7 +127,7 @@
   async function init() {
     fillGroups();
     try {
-      const raw = await ExpeditingData.loadRaw(); const meta = await ExpeditingData.meta();
+      const raw = await ExpeditingData.loadRaw({ related: true }); const meta = await ExpeditingData.meta();
       rows = raw ? raw.rows : [];
       $('pv-src').textContent = rows.length ? `Bedrijfsbrede lijst: ${rows.length.toLocaleString('nl-NL')} regels${meta && meta.uploaded ? ' · stand ' + dmy(meta.uploaded) : ''}` : 'Geen bedrijfsbrede lijst gevonden.';
     } catch (e) { $('pv-src').textContent = 'Lijst laden mislukt: ' + e.message; }

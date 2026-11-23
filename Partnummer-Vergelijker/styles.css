@@ -30,3 +30,4 @@ html[data-theme="light"] .pv-bar{background:#EEF2F8}
 .pv-table td.pv-strong,.pv-strong{color:var(--pv-strong);font-weight:700}
 .pv-muted{color:var(--muted,#6b7a99)}
 .pv-empty{text-align:center;color:var(--muted,#6b7a99);padding:1.2rem;white-space:normal}
+.pv-table td.pv-cand{color:var(--pv-bad);font-style:italic}

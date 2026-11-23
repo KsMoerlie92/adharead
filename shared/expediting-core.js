@@ -21,9 +21,21 @@
 
   // Alleen deze project-prefixes worden ingelezen (Sub Project ID).
   const PROJECT_PREFIXES = ['YN', 'EN'];
-  function keepProject(sub){
+  function keepProject(sub, opts){
     const s = String(sub == null ? '' : sub).trim().toUpperCase();
-    return PROJECT_PREFIXES.some(p => s.startsWith(p));
+    if (PROJECT_PREFIXES.some(p => s.startsWith(p))) return true;
+    return !!(opts && opts.related) && relatedProjects().has(s);
+  }
+  // Subprojecten uit shared/project-relations.js (DE…, SH…, SE…, SMIT…).
+  // Alleen meegenomen waar daar expliciet om gevraagd wordt (opts.related):
+  // bij het committen (Admin) en in de Partnummer-vergelijker.
+  function relatedProjects(){
+    const set = new Set();
+    (global.PROJECT_RELATIONS || []).forEach(g => {
+      if (g && g.parent) set.add(String(g.parent).trim().toUpperCase());
+      (g && g.projects || []).forEach(p => { const id = typeof p === 'string' ? p : p && p.id; if (id) set.add(String(id).trim().toUpperCase()); });
+    });
+    return set;
   }
 
   // X-parts: Part No begint met 'X' → dummy/placeholder → uitfilteren.
@@ -158,7 +170,7 @@
   // rijen als objecten gekeyed op header (kolomvolgorde behouden) — exact het
   // formaat dat PO-Matcher (en andere tools) van een ingeladen lijst verwachten.
   // Alleen regels van projecten met prefix YN/EN, en zonder X-part, worden meegenomen.
-  function rawTable(raw){
+  function rawTable(raw, opts){
     const h=detectHeader(raw);
     const headerRow=(raw[h]||[]);
     const subIdx  = headerRow.findIndex(c=>String(c==null?'':c).trim()===COLS.sub);
@@ -172,7 +184,7 @@
     const rows=[];
     for(let r=h+1;r<raw.length;r++){
       const row=raw[r]; if(!row||row.every(c=>c==null||c==='')) continue;
-      if(subIdx>=0 && !keepProject(row[subIdx])) continue;   // ← alleen YN/EN-projecten
+      if(subIdx>=0 && !keepProject(row[subIdx], opts)) continue;   // ← alleen YN/EN (+ subprojecten bij opts.related)
       if(partIdx>=0 && isXPart(row[partIdx])) continue;      // ← X-parts uitfilteren
       const o={}; headers.forEach((hd,i)=>{ o[hd]=row[i]==null?'':row[i]; }); rows.push(o);
     }
@@ -183,10 +195,10 @@
   // Wordt gebruikt door expediting-data.js bij het LEZEN, zodat een oudere
   // (nog niet opnieuw gecommitte) expediting-data.json alsnog X-parts en
   // niet-YN/EN-projecten weglaat. Idempotent — dubbel filteren is onschadelijk.
-  function filterTable(table){
+  function filterTable(table, opts){
     if(!table || !Array.isArray(table.headers) || !Array.isArray(table.rows)) return table;
     const rows = table.rows.filter(o => {
-      if(!keepProject(o[COLS.sub])) return false;
+      if(!keepProject(o[COLS.sub], opts)) return false;
       if(isXPart(o[COLS.part])) return false;
       return true;
     });
@@ -194,7 +206,7 @@
   }
 
   global.ExpeditingCore = {
-    OPEN, EU, MONTHS, COLS, PROJECT_PREFIXES, keepProject, isXPart,
+    OPEN, EU, MONTHS, COLS, PROJECT_PREFIXES, keepProject, relatedProjects, isXPart,
     toDate, num, dmy, shortD, esc, detectHeader,
     normalizeFromRaw, rawTable, filterTable, score, aggregate, startOfToday
   };

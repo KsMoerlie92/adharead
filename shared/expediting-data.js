@@ -36,10 +36,10 @@
 
   // Defensieve filter op een { headers, rows(objecten) }-tabel via ExpeditingCore.
   // Fail-open: als core (nog) niet geladen is, geef de tabel ongewijzigd terug.
-  function _filter(table){
+  function _filter(table, opts){
     try {
       if (global.ExpeditingCore && typeof ExpeditingCore.filterTable === 'function')
-        return ExpeditingCore.filterTable(table);
+        return ExpeditingCore.filterTable(table, opts);
     } catch(e){ /* stil: liever ongefilterd tonen dan crashen */ }
     return table;
   }
@@ -54,7 +54,7 @@
   async function clear(){ await put('dataset',null); await put('raw',null); await put('meta',null); }
   // direct uit IndexedDB (door de Admin-pagina gebruikt voor de "wat ga ik committen"-status)
   async function loadLocal(){    return (await get('dataset'))||null; }
-  async function loadRawLocal(){ const r = (await get('raw'))||null; return r ? _filter(r) : null; }
+  async function loadRawLocal(opts){ const r = (await get('raw'))||null; return r ? _filter(r, opts) : null; }
   async function metaLocal(){    return (await get('meta'))||null; }
 
   // ── Bedrijfsbreed bestand vastgelegd in de repo (shared/expediting-data.json) ──
@@ -83,7 +83,8 @@
         }
       } catch(e){}
       const meta = Object.assign({ rows: filtered.rows.length, source:'repo' }, j.meta||{});
-      return { raw:{ headers: filtered.headers, rows: filtered.rows }, lines, meta };
+      const related = _filter({ headers, rows: rowsObj }, { related:true });   // incl. subprojecten (Partnummer-vergelijker)
+      return { raw:{ headers: filtered.headers, rows: filtered.rows }, rawRelated: related, lines, meta };
     }catch(e){ return null; }
   }
   async function _ensureCommitted(){
@@ -94,7 +95,8 @@
 
   // Lezen op de consumerende pagina's: eerst het gecommitte bestand, anders lokaal.
   async function load(){    const c=await _ensureCommitted(); return c ? c.lines : ((await get('dataset'))||null); }
-  async function loadRaw(){ const c=await _ensureCommitted(); return c ? c.raw   : (await loadRawLocal()); }
+  // loadRaw({related:true}) = ook de subprojecten uit shared/project-relations.js
+  async function loadRaw(opts){ const c=await _ensureCommitted(); const rel=opts&&opts.related; return c ? (rel ? c.rawRelated : c.raw) : (await loadRawLocal(opts)); }
   async function meta(){    const c=await _ensureCommitted(); return c ? c.meta  : ((await get('meta'))||null); }
 
   // Kolommen die de tools + datalaag nodig hebben. Overige kolommen worden
@@ -115,7 +117,7 @@
   // De rawTable is al door ExpeditingCore gefilterd (YN/EN + geen X-parts); hier
   // filteren we defensief nogmaals zodat een handmatig samengestelde tabel ook schoon is.
   function buildCommitJSON(rawTable, metaObj){
-    const src = _filter(rawTable);
+    const src = _filter(rawTable, { related:true });   // YN/EN + subprojecten uit project-relations.js
     const headers = src.headers.filter(h => KEEP_COLS.includes(h) || EXTRA_COLS.test(String(h)));
     const rows = src.rows.map(o => headers.map(h => { const v=o[h]; return v instanceof Date ? v.toISOString() : (v==null?'':v); }));
     return JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length }, metaObj||{}), headers, rows });

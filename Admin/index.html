@@ -164,8 +164,9 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
 </div>
 
 <!-- Expediting datalaag -->
-<script src="../shared/expediting-core.js"></script>
-<script src="../shared/expediting-data.js?v=20261118"></script>
+<script src="../shared/project-relations.js?v=20261123b"></script>
+<script src="../shared/expediting-core.js?v=20261123"></script>
+<script src="../shared/expediting-data.js?v=20261123"></script>
 <script src="../shared/inspection-rules.js"></script>
 <script src="../shared/fat-data.js"></script>
 <script>
@@ -189,7 +190,7 @@ function read(file){
     const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
     const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
     const lines=ExpeditingCore.normalizeFromRaw(raw);
-    const rawTable=ExpeditingCore.rawTable(raw);
+    const rawTable=ExpeditingCore.rawTable(raw,{related:true});   // incl. subprojecten (project-relations.js)
     await ExpeditingData.save(lines,{filename:file.name},rawTable);
     _lastCommitJSON = ExpeditingData.buildCommitJSON(rawTable,{filename:file.name});
     _offerDownload(_lastCommitJSON,'expediting-data.json');
@@ -225,7 +226,7 @@ async function showStatus(){
 document.getElementById('fat-redownload').onclick=()=>{ if(_lastFatJSON) _offerDownload(_lastFatJSON,'addreq-list.json'); };
 document.getElementById('clear').onclick=async()=>{ if(confirm('Centrale lijst wissen?')){ await ExpeditingData.clear(); showStatus(); } };
 document.getElementById('redownload').onclick=async()=>{
-  const raw=await ExpeditingData.loadRawLocal(), m=await ExpeditingData.metaLocal();
+  const raw=await ExpeditingData.loadRawLocal({related:true}), m=await ExpeditingData.metaLocal();
   if(!raw){ alert('Nog geen lijst geüpload in deze browser. Upload eerst hierboven.'); return; }
   _offerDownload(ExpeditingData.buildCommitJSON(raw, m||{}), 'expediting-data.json');
 };
