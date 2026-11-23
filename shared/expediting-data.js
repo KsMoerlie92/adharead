@@ -62,6 +62,18 @@
   // Valt terug op de lokaal (IndexedDB) geüploade lijst als het bestand er niet is.
   const _SELF = (document.currentScript && document.currentScript.src) || '';
   const _JSON_URL = _SELF ? _SELF.replace(/[^/]+$/, 'expediting-data.json') : '../shared/expediting-data.json';
+  // Aparte Excel-rapportage met de regels van de subprojecten (DE…, SH…, SE…, SMIT…),
+  // via Admin omgezet naar shared/related-data.json. Alleen gebruikt door loadRaw({related:true}).
+  const _REL_URL  = _SELF ? _SELF.replace(/[^/]+$/, 'related-data.json') : '../shared/related-data.json';
+  async function _fetchRelated(){
+    try{
+      const res = await fetch(_REL_URL, { cache:'no-cache' });
+      if(!res.ok) return null;
+      const j = await res.json();
+      if(!j || !Array.isArray(j.headers) || !Array.isArray(j.rows)) return null;
+      return { meta: j.meta||{}, rows: j.rows.map(arr => { const o={}; j.headers.forEach((h,i)=>{ o[h] = arr[i]==null?'':arr[i]; }); return o; }) };
+    }catch(e){ return null; }
+  }
   let _committed; // memo: { raw, lines, meta } | null
 
   async function _fetchCommitted(){
@@ -84,6 +96,15 @@
       } catch(e){}
       const meta = Object.assign({ rows: filtered.rows.length, source:'repo' }, j.meta||{});
       const related = _filter({ headers, rows: rowsObj }, { related:true });   // incl. subprojecten (Partnummer-vergelijker)
+      // + regels uit de aparte subprojecten-rapportage (related-data.json), zonder dubbele PO-regels
+      const rel = await _fetchRelated();
+      if (rel && rel.rows.length){
+        const key = o => [o['Sub Project ID'],o['Order No'],o['Line No'],o['Release No']].map(v=>String(v==null?'':v).trim()).join('|');
+        const seen = new Set(related.rows.map(key));
+        const extra = _filter({ headers, rows: rel.rows }, { related:true }).rows.filter(o => !seen.has(key(o)));
+        related.rows = related.rows.concat(extra);
+        related.relatedMeta = Object.assign({ rows: extra.length }, rel.meta);
+      }
       return { raw:{ headers: filtered.headers, rows: filtered.rows }, rawRelated: related, lines, meta };
     }catch(e){ return null; }
   }
@@ -123,5 +144,17 @@
     return JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length }, metaObj||{}), headers, rows });
   }
 
-  global.ExpeditingData = { save, load, loadRaw, meta, clear, loadLocal, loadRawLocal, metaLocal, buildCommitJSON };
+  // Subprojecten-rapportage → related-data.json: alleen regels van subprojecten uit
+  // project-relations.js die NIET met YN/EN beginnen (die zitten al in expediting-data.json).
+  function buildRelatedJSON(rawTable, metaObj){
+    const prefixes = (global.ExpeditingCore && ExpeditingCore.PROJECT_PREFIXES) || ['YN','EN'];
+    const src = _filter(rawTable, { related:true });
+    const rowsIn = src.rows.filter(o => { const s=String(o['Sub Project ID']||'').trim().toUpperCase(); return s && !prefixes.some(p=>s.startsWith(p)); });
+    const headers = src.headers.filter(h => KEEP_COLS.includes(h) || EXTRA_COLS.test(String(h)));
+    const rows = rowsIn.map(o => headers.map(h => { const v=o[h]; return v instanceof Date ? v.toISOString() : (v==null?'':v); }));
+    const perProject = {}; rowsIn.forEach(o => { const s=String(o['Sub Project ID']).trim().toUpperCase(); perProject[s]=(perProject[s]||0)+1; });
+    return { json: JSON.stringify({ meta: Object.assign({ uploaded:new Date().toISOString(), rows: rows.length, perProject }, metaObj||{}), headers, rows }), perProject, rows: rows.length };
+  }
+
+  global.ExpeditingData = { buildRelatedJSON, save, load, loadRaw, meta, clear, loadLocal, loadRawLocal, metaLocal, buildCommitJSON };
 })(window);

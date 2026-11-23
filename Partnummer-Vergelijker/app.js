@@ -129,7 +129,9 @@
     try {
       const raw = await ExpeditingData.loadRaw({ related: true }); const meta = await ExpeditingData.meta();
       rows = raw ? raw.rows : [];
-      $('pv-src').textContent = rows.length ? `Bedrijfsbrede lijst: ${rows.length.toLocaleString('nl-NL')} regels${meta && meta.uploaded ? ' · stand ' + dmy(meta.uploaded) : ''}` : 'Geen bedrijfsbrede lijst gevonden.';
+      const rm = raw && raw.relatedMeta;
+      $('pv-src').textContent = rows.length ? `Bedrijfsbrede lijst: stand ${meta && meta.uploaded ? dmy(meta.uploaded) : '?'}` +
+        (rm ? ` · subprojecten-rapportage: ${rm.rows.toLocaleString('nl-NL')} regels, stand ${rm.uploaded ? dmy(rm.uploaded) : '?'}` : ' · nog geen subprojecten-rapportage (Admin → related-data.json)') : 'Geen bedrijfsbrede lijst gevonden.';
     } catch (e) { $('pv-src').textContent = 'Lijst laden mislukt: ' + e.message; }
     fillProjects(); compute();
     $('pv-group').onchange = () => { fillProjects(); compute(); };

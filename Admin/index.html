@@ -105,6 +105,24 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
   </div>
 
   <div class="panel">
+    <h1 style="font-size:1.1rem;margin-bottom:.3rem">Subprojecten-rapportage</h1>
+    <p class="lead" style="margin-bottom:.7rem">
+      Aparte Excel-rapportage met de regels van de subprojecten (DE…, SH…, SE…, SMIT…) die in
+      <code>shared/project-relations.js</code> onder een hoofdproject hangen. Zelfde opbouw als de bedrijfsbrede lijst
+      (kolom F = Sub Project ID). Wordt alleen gebruikt door de Partnummer-vergelijker.
+    </p>
+    <div class="dz" id="rel-dz" onclick="document.getElementById('rel-file').click()">
+      <p><b>Sleep de subprojecten-.xlsx hierheen</b> of klik om te kiezen</p>
+      <input type="file" id="rel-file" accept=".xlsx,.xlsm" hidden>
+      <p class="muted" id="rel-msg" style="margin-top:.4rem">—</p>
+    </div>
+    <p class="muted" style="margin-top:.7rem;line-height:1.55">
+      Na het inlezen wordt <code>related-data.json</code> gedownload. Commit dat bestand naar <code>shared/</code>.
+      <button class="btn" id="rel-redownload" style="margin-left:.4rem" disabled>↻ related-data.json opnieuw downloaden</button>
+    </p>
+  </div>
+
+  <div class="panel">
     <h1 style="font-size:1.1rem;margin-bottom:.6rem">Huidige status</h1>
     <div id="statusBox"></div>
     <div class="kpis" id="kpis" style="display:none"></div>
@@ -166,7 +184,7 @@ code{background:#0c1a36;padding:.05rem .35rem;border-radius:4px;font-family:var(
 <!-- Expediting datalaag -->
 <script src="../shared/project-relations.js?v=20261123b"></script>
 <script src="../shared/expediting-core.js?v=20261123"></script>
-<script src="../shared/expediting-data.js?v=20261123"></script>
+<script src="../shared/expediting-data.js?v=20261123b"></script>
 <script src="../shared/inspection-rules.js"></script>
 <script src="../shared/fat-data.js"></script>
 <script>
@@ -231,6 +249,36 @@ document.getElementById('redownload').onclick=async()=>{
   _offerDownload(ExpeditingData.buildCommitJSON(raw, m||{}), 'expediting-data.json');
 };
 showStatus();
+
+// ── Subprojecten-rapportage → related-data.json ──
+let _lastRelJSON=null;
+(function(){
+  const dz=document.getElementById('rel-dz'), fi=document.getElementById('rel-file'), msg=document.getElementById('rel-msg');
+  function readRel(file){
+    msg.textContent='Inlezen…';
+    const r=new FileReader();
+    r.onload=ev=>{ try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+      const ws=wb.Sheets['Result']||wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+      const t=ExpeditingCore.rawTable(raw,{related:true});
+      const out=ExpeditingData.buildRelatedJSON(t,{filename:file.name});
+      const all=[...ExpeditingCore.relatedProjects()].filter(p=>!/^(YN|EN)/.test(p));
+      const missing=all.filter(p=>!out.perProject[p]);
+      if(!out.rows){ msg.innerHTML='Geen regels van de subprojecten gevonden. Staat het subprojectnummer in kolom <code>Sub Project ID</code>?'; return; }
+      _lastRelJSON=out.json; document.getElementById('rel-redownload').disabled=false;
+      _offerDownload(out.json,'related-data.json');
+      msg.innerHTML='Verwerkt ✓ — '+out.rows.toLocaleString('nl-NL')+' regels: '+Object.entries(out.perProject).map(([k,v])=>'<b>'+ExpeditingCore.esc(k)+'</b> '+v).join(' · ')+
+        (missing.length?'<br>Niet in dit bestand: '+missing.map(ExpeditingCore.esc).join(', '):'')+'<br>Commit related-data.json naar shared/';
+    }catch(err){ msg.textContent='Fout: '+err.message; } };
+    r.readAsArrayBuffer(file);
+  }
+  fi.onchange=e=>{ if(e.target.files[0]) readRel(e.target.files[0]); };
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+  dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)readRel(f);});
+  document.getElementById('rel-redownload').onclick=()=>{ if(_lastRelJSON) _offerDownload(_lastRelJSON,'related-data.json'); };
+})();
 
 // ── Inspection Level — projectregels ────────────────────────────────────────
 function _irEsc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
