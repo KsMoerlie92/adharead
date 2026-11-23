@@ -18,6 +18,7 @@
       { href: 'KPI-Dashboard/',       icon: '📊', title: 'Dashboard',            sub: 'KPI-cijfers per Sub Project ID' },
       { href: 'Bezoekverslag/',       icon: '🧾', title: 'Bezoekverslag',        sub: 'Leveranciersbezoek vastleggen & verslag maken' },
       { href: 'Large-Item-Overview/', icon: '🏗️', title: 'Large Item Overview',  sub: 'Large items, late items & FAT — bedrijfsbreed' },
+      { href: 'Partnummer-Vergelijker/', icon: '🔗', title: 'Partnummer-vergelijker', sub: 'IHC-partnummers vs. leverdatum in gerelateerde projecten' },
       { href: 'IFS-Migration-Tool/',  icon: '🔁', title: 'IFS Migration Tool',   sub: 'Klembord-import/export & Itemlijst-registratie naar IFS' },
     ]},
     { label: 'Logistics', items: [

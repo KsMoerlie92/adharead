@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal IHC — Partnummer-vergelijker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/nav.css">
+<link rel="stylesheet" href="../PO-Matcher/styles.css">
+<link rel="stylesheet" href="styles.css?v=20261123">
+</head>
+<body>
+<script src="../shared/site-gate.js"></script>
+
+<div class="site-wrapper">
+  <section class="content-panel">
+    <div class="section-head"><span class="red-mark"></span>Partnummer-vergelijker</div>
+    <p class="pv-intro">Regels met een IHC-leverancier in het gekozen project, vergeleken met hetzelfde Part No in de gerelateerde projecten onder IHC Holland. Gesorteerd op de grootste afwijking in leverdatum.</p>
+
+    <div class="pv-source" id="pv-src">Bedrijfsbrede lijst laden…</div>
+
+    <div class="pv-bar">
+      <label>Groep (IHC Holland)
+        <select id="pv-group"></select></label>
+      <label>Project
+        <select id="pv-project"></select></label>
+      <label>Vergelijk met
+        <select id="pv-basis">
+          <option value="planned">Planned Delivery Date</option>
+          <option value="lwr">Latest Wanted Receipt Date</option>
+        </select></label>
+      <label class="pv-chk"><input type="checkbox" id="pv-nomatch"> Ook regels zonder match</label>
+      <input class="pv-search" id="pv-search" type="text" placeholder="🔍 Zoek…">
+      <button class="btn-val" id="pv-export">⬇ Excel</button>
+    </div>
+
+    <div class="pv-group-info" id="pv-ginfo"></div>
+    <div class="pv-summary" id="pv-sum"></div>
+
+    <div class="pv-table-wrap">
+      <table class="pv-table">
+        <thead id="pv-thead"></thead>
+        <tbody id="pv-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script src="../shared/expediting-core.js"></script>
+<script src="../shared/expediting-data.js?v=20261118"></script>
+<script src="../shared/project-relations.js?v=20261123"></script>
+<script src="app.js?v=20261123"></script>
+<script src="../shared/shared.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+/* Partnummer-vergelijker — sluit aan op PO-Matcher/styles.css + shared/nav.css */
+:root{ --pv-fg:#c7d3e8; --pv-strong:#F0F4FA; --pv-in:#0A1628; --pv-bad:#ff8a93; --pv-ok:#4ade80; }
+html[data-theme="light"]{ --pv-fg:#16263F; --pv-strong:#0A1628; --pv-in:#FFFFFF; --pv-bad:#B3121D; --pv-ok:#1c7a3c; }
+.pv-intro{color:var(--pv-fg);font-size:.8rem;margin:.2rem 0 .8rem;max-width:900px}
+.pv-source,.pv-summary,.pv-group-info{font-family:var(--mono,'JetBrains Mono',monospace);font-size:.68rem;color:var(--pv-fg);margin-bottom:.5rem}
+.pv-summary b,.pv-group-info b{color:var(--teal,#00B4D8)}
+.pv-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:.75rem;background:var(--navy-mid,#0F2040);
+  border:1px solid rgba(127,150,190,.25);border-radius:8px;padding:.6rem .8rem;margin-bottom:.6rem}
+html[data-theme="light"] .pv-bar{background:#EEF2F8}
+.pv-bar label{display:flex;flex-direction:column;gap:.2rem;font-family:var(--mono,'JetBrains Mono',monospace);
+  font-size:.6rem;color:var(--muted,#6b7a99);letter-spacing:.03em}
+.pv-bar select,.pv-search{background:var(--pv-in);border:1px solid rgba(127,150,190,.3);border-radius:6px;
+  padding:.35rem .5rem;color:var(--pv-strong);font-size:.72rem;font-family:var(--mono,'JetBrains Mono',monospace)}
+.pv-bar label.pv-chk{flex-direction:row;align-items:center;font-size:.68rem;color:var(--pv-fg)}
+.pv-search{width:200px}
+#pv-export{margin-left:auto}
+.pv-table-wrap{overflow:auto;max-height:64vh;border:1px solid rgba(127,150,190,.25);border-radius:8px}
+.pv-table{width:100%;border-collapse:collapse;font-size:.7rem}
+.pv-table th{position:sticky;top:0;z-index:2;background:var(--steel,#1e3a6e);color:#F0F4FA;cursor:pointer;
+  font-family:var(--mono,'JetBrains Mono',monospace);font-size:.62rem;font-weight:700;text-align:left;
+  padding:.45rem .5rem;white-space:nowrap;user-select:none}
+.pv-table th.pv-sec{background:#16305c}
+.pv-table th .pv-arr{opacity:.8;margin-left:.25rem}
+.pv-table td{padding:.35rem .5rem;border-bottom:1px solid rgba(127,150,190,.15);color:var(--pv-fg);
+  white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.pv-table tbody tr:hover td{background:rgba(0,180,216,.07)}
+.pv-num{text-align:right;font-family:var(--mono,'JetBrains Mono',monospace)}
+.pv-table td.pv-late{color:var(--pv-bad);font-weight:700}
+.pv-table td.pv-early{color:var(--pv-ok);font-weight:700}
+.pv-table td.pv-strong,.pv-strong{color:var(--pv-strong);font-weight:700}
+.pv-muted{color:var(--muted,#6b7a99)}
+.pv-empty{text-align:center;color:var(--muted,#6b7a99);padding:1.2rem;white-space:normal}

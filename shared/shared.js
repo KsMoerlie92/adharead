@@ -18,6 +18,7 @@
       { href: '../KPI-Dashboard/',       icon: '📊', title: 'Dashboard',          sub: 'KPI-cijfers per Sub Project ID' },
       { href: '../Bezoekverslag/',       icon: '🧾', title: 'Bezoekverslag',      sub: 'Leveranciersbezoek vastleggen & verslag maken' },
       { href: '../Large-Item-Overview/', icon: '🏗️', title: 'Large Item Overview', sub: 'Large items, late items & FAT — bedrijfsbreed' },
+      { href: '../Partnummer-Vergelijker/', icon: '🔗', title: 'Partnummer-vergelijker', sub: 'IHC-partnummers vs. leverdatum in gerelateerde projecten' },
     ]},
     { label: 'Logistics', items: [
       { href: '../Legplan/',             icon: '📦', title: 'Logistic Portal',    sub: 'Legplan, CIPL & shipment-informatie' },
