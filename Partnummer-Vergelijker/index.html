@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/nav.css">
 <link rel="stylesheet" href="../PO-Matcher/styles.css">
-<link rel="stylesheet" href="styles.css?v=20261123">
+<link rel="stylesheet" href="styles.css?v=20261123e">
 </head>
 <body>
 <script src="../shared/site-gate.js"></script>
@@ -37,6 +37,11 @@
 
     <div class="pv-group-info" id="pv-ginfo"></div>
     <div class="pv-summary" id="pv-sum"></div>
+    <div class="pv-legend">
+      <span><span class="pv-inco" style="color:var(--pv-ok)">D</span>DAP/DPU/DDP — komt op leverdatum bij ons aan</span>
+      <span><span class="pv-inco" style="color:#f5b041">C</span>CPT/CIP/CFR/CIF — leverancier regelt hoofdvervoer; datum = verzending</span>
+      <span><span class="pv-inco" style="color:var(--pv-bad)">E/F</span>EXW/FCA/FAS/FOB — wij regelen het vervoer; datum = gereed bij leverancier</span>
+    </div>
 
     <div class="pv-table-wrap">
       <table class="pv-table">
@@ -50,7 +55,7 @@
 <script src="../shared/project-relations.js?v=20261123b"></script>
 <script src="../shared/expediting-core.js?v=20261123c"></script>
 <script src="../shared/expediting-data.js?v=20261123c"></script>
-<script src="app.js?v=20261123c"></script>
+<script src="app.js?v=20261123e"></script>
 <script src="../shared/shared.js"></script>
 </body>
 </html>

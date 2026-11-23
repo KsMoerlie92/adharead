@@ -17,6 +17,16 @@
   const poLine = r => [trim(r['Order No']), trim(r['Line No']), trim(r['Release No'])].filter(Boolean).join('-');
   const proj = r => trim(r['Sub Project ID']).toUpperCase();
   const part = r => trim(r['Part No']);
+  // Incoterm (kolom AE 'Delivery Terms', bv. 'DAP20 Kinderdijk') → wat de leverdatum betekent
+  const incoterm = r => trim(r['Delivery Terms']);
+  function incoKind(t) {
+    const c = (String(t).toUpperCase().match(/\b(EXW|FCA|FAS|FOB|CPT|CIP|CFR|CIF|DAP|DPU|DAT|DDP)/) || [])[1];
+    if (!c) return { code: '', cls: '', label: '' };
+    if (/^D/.test(c)) return { code: c, cls: 'pv-inco-d', label: 'Komt op leverdatum bij ons aan' };
+    if (/^C/.test(c)) return { code: c, cls: 'pv-inco-c', label: 'Leverancier regelt hoofdvervoer; leverdatum = verzending' };
+    return { code: c, cls: 'pv-inco-ef', label: 'Wij regelen het vervoer; leverdatum = gereed bij leverancier' };
+  }
+  const incoCell = (t, extra) => { const k = incoKind(t); return `<td class="${extra} ${k.cls}" title="${esc(k.label ? k.label + ' — ' : '')}${esc(t)}">${k.code ? `<span class="pv-inco">${esc(k.code)}</span>` : ''}${esc(k.code ? t.replace(/^\s*[A-Z]{3}\s*(20(10|20)?)?\s*/i, '') : t) || (k.code ? '' : esc(t) || '—')}</td>`; };
 
   const pid = p => trim(typeof p === 'string' ? p : p && p.id).toUpperCase();
   // Alle projectnummers van een groep: hoofdproject + subprojecten
@@ -65,7 +75,7 @@
       const own = basis === 'lwr' ? day(r['Latest Wanted Receipt Date']) : day(r['Planned Delivery Date']);
       const hits = idx.get(part(r)) || [];
       if (!hits.length) {
-        if (showNo) result.push({ part: part(r), desc: trim(r['Description']), sup: trim(r['Supplier Name']), po: poLine(r), own,
+        if (showNo) result.push({ part: part(r), desc: trim(r['Description']), sup: trim(r['Supplier Name']), po: poLine(r), own, inco: incoterm(r), oInco: '',
           oProj: '', oZek: '', oPo: '', oSup: '', oDate: null, oEst: false, dev: null, absDev: -1 });
         return;
       }
@@ -73,20 +83,23 @@
         let oDate = day(h['Planned Delivery Date']), oEst = false;
         if (!oDate) { oDate = day(h['Latest Wanted Receipt Date']); oEst = !!oDate; }
         const dev = diffDays(oDate, own);
-        result.push({ part: part(r), desc: trim(r['Description']), sup: trim(r['Supplier Name']), po: poLine(r), own,
+        result.push({ part: part(r), desc: trim(r['Description']), sup: trim(r['Supplier Name']), po: poLine(r), own, inco: incoterm(r), oInco: incoterm(h),
           oProj: proj(h), oZek: projInfo(g, proj(h)).zekerheid || '', oPo: poLine(h), oSup: trim(h['Supplier Name']), oDate, oEst, dev, absDev: dev == null ? -1 : Math.abs(dev) });
       });
     });
     render();
   }
 
+  // sec: 0 = hoofdproject, 1 = gevonden in subproject, 2 = vergelijking
   const COLS = [
-    ['part', 'Part No'], ['desc', 'Omschrijving'], ['sup', 'IHC-leverancier'], ['po', 'PO-regel'], ['own', 'Leverdatum project'],
-    ['oProj', 'Gerelateerd project', 1], ['oZek', 'Zekerheid koppeling', 1], ['oPo', 'PO-regel', 1], ['oSup', 'Leverancier', 1], ['oDate', 'Leverdatum', 1], ['dev', 'Afwijking (dagen)', 1],
+    ['part', 'Part No', 0], ['desc', 'Omschrijving', 0], ['sup', 'IHC-leverancier', 0], ['po', 'PO-regel', 0], ['inco', 'Incoterm', 0], ['own', 'Leverdatum', 0],
+    ['oProj', 'Subproject', 1], ['oZek', 'Zekerheid', 1], ['oPo', 'PO-regel', 1], ['oSup', 'Leverancier', 1], ['oInco', 'Incoterm', 1], ['oDate', 'Leverdatum', 1],
+    ['dev', 'Afwijking (d)', 2],
   ];
+  const SEC_CLS = ['pv-own', 'pv-rel', 'pv-cmp'];
   function render() {
     const q = trim($('pv-search').value).toLowerCase().split(/\s+/).filter(Boolean);
-    let list = result.filter(o => !q.length || q.every(w => [o.part, o.desc, o.sup, o.po, o.oProj, o.oPo, o.oSup].join(' ').toLowerCase().includes(w)));
+    let list = result.filter(o => !q.length || q.every(w => [o.part, o.desc, o.sup, o.po, o.inco, o.oProj, o.oPo, o.oSup, o.oInco].join(' ').toLowerCase().includes(w)));
     const val = (o, k) => { const v = o[k]; return v instanceof Date ? v.getTime() : (v == null || v === '' ? null : v); };
     list.sort((a, b) => {
       const x = val(a, sortKey), y = val(b, sortKey);
@@ -94,14 +107,18 @@
       return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'nl', { numeric: true })) * sortDir;
     });
     const sk = sortKey === 'absDev' ? 'dev' : sortKey;
-    $('pv-thead').innerHTML = '<tr>' + COLS.map(([k, t, sec]) =>
-      `<th data-k="${k}" class="${sec ? 'pv-sec' : ''}">${t}${sk === k ? `<span class="pv-arr">${sortKey === 'absDev' ? '⇅' : (sortDir > 0 ? '▲' : '▼')}</span>` : ''}</th>`).join('') + '</tr>';
+    const nOwn = COLS.filter(c => c[2] === 0).length, nRel = COLS.filter(c => c[2] === 1).length;
+    $('pv-thead').innerHTML =
+      `<tr class="pv-band"><th class="pv-own pv-first" colspan="${nOwn}">Hoofdproject ${esc($('pv-project').value)}</th><th class="pv-rel pv-first" colspan="${nRel}">Gevonden in subproject</th><th class="pv-cmp pv-first">Δ</th></tr>` +
+      '<tr>' + COLS.map(([k, t, sec], i) =>
+      `<th data-k="${k}" class="${SEC_CLS[sec]}${i && COLS[i - 1][2] !== sec ? ' pv-first' : ''}">${t}${sk === k ? `<span class="pv-arr">${sortKey === 'absDev' ? '⇅' : (sortDir > 0 ? '▲' : '▼')}</span>` : ''}</th>`).join('') + '</tr>';
     $('pv-tbody').innerHTML = list.length ? list.map(o => `<tr>
-      <td class="pv-strong">${esc(o.part)}</td><td title="${esc(o.desc)}">${esc(o.desc)}</td><td>${esc(o.sup)}</td><td>${esc(o.po)}</td>
-      <td>${o.own ? dmy(o.own) : '—'}</td>
-      <td class="pv-strong">${esc(o.oProj) || '<span class="pv-muted">geen match</span>'}</td><td class="${o.oZek === 'kandidaat' ? 'pv-cand' : ''}">${esc(o.oZek)}</td><td>${esc(o.oPo)}</td><td>${esc(o.oSup)}</td>
-      <td>${o.oDate ? dmy(o.oDate) + (o.oEst ? ' <span class="pv-muted" title="Geen Planned Delivery Date; Latest Wanted Receipt Date gebruikt">*</span>' : '') : '—'}</td>
-      <td class="pv-num ${o.dev > 0 ? 'pv-late' : o.dev < 0 ? 'pv-early' : ''}">${o.dev == null ? '—' : (o.dev > 0 ? '+' : '') + o.dev}</td></tr>`).join('')
+      <td class="pv-own pv-strong">${esc(o.part)}</td><td class="pv-own" title="${esc(o.desc)}">${esc(o.desc)}</td><td class="pv-own">${esc(o.sup)}</td><td class="pv-own">${esc(o.po)}</td>
+      ${incoCell(o.inco, 'pv-own')}<td class="pv-own pv-strong">${o.own ? dmy(o.own) : '—'}</td>
+      <td class="pv-rel pv-first pv-strong">${esc(o.oProj) || '<span class="pv-muted">geen match</span>'}</td><td class="pv-rel ${o.oZek === 'kandidaat' ? 'pv-cand' : ''}">${esc(o.oZek)}</td><td class="pv-rel">${esc(o.oPo)}</td><td class="pv-rel">${esc(o.oSup)}</td>
+      ${o.oProj ? incoCell(o.oInco, 'pv-rel') : '<td class="pv-rel"></td>'}
+      <td class="pv-rel pv-strong">${o.oDate ? dmy(o.oDate) + (o.oEst ? ' <span class="pv-muted" title="Geen Planned Delivery Date; Latest Wanted Receipt Date gebruikt">*</span>' : '') : '—'}</td>
+      <td class="pv-cmp pv-first pv-num ${o.dev > 0 ? 'pv-late' : o.dev < 0 ? 'pv-early' : ''}">${o.dev == null ? '—' : (o.dev > 0 ? '+' : '') + o.dev}</td></tr>`).join('')
       : `<tr><td colspan="${COLS.length}" class="pv-empty">${GROUPS.length ? 'Geen IHC-regels met hetzelfde Part No in de bijbehorende projecten. Staan de subprojecten al in de bedrijfsbrede lijst? (zie hierboven)' : 'Nog geen projectrelaties gedefinieerd (shared/project-relations.js).'}</td></tr>`;
     const parts = new Set(result.filter(o => o.oProj).map(o => o.part)).size;
     const late = result.filter(o => o.dev > 0).length;
@@ -118,8 +135,8 @@
 
   function exportXlsx() {
     const list = window._pvList || [];
-    const aoa = [COLS.map(c => (c[2] ? 'Gerelateerd · ' : '') + c[1])].concat(list.map(o =>
-      [o.part, o.desc, o.sup, o.po, o.own ? dmy(o.own) : '', o.oProj, o.oZek, o.oPo, o.oSup, o.oDate ? dmy(o.oDate) : '', o.dev == null ? '' : o.dev]));
+    const aoa = [COLS.map(c => (c[2] === 0 ? 'Hoofdproject · ' : c[2] === 1 ? 'Subproject · ' : '') + c[1])].concat(list.map(o =>
+      [o.part, o.desc, o.sup, o.po, o.inco, o.own ? dmy(o.own) : '', o.oProj, o.oZek, o.oPo, o.oSup, o.oInco, o.oDate ? dmy(o.oDate) : '', o.dev == null ? '' : o.dev]));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Vergelijking');
     XLSX.writeFile(wb, `Partnummer-vergelijking_${$('pv-project').value || 'project'}.xlsx`);
   }

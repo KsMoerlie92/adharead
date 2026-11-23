@@ -31,3 +31,28 @@ html[data-theme="light"] .pv-bar{background:#EEF2F8}
 .pv-muted{color:var(--muted,#6b7a99)}
 .pv-empty{text-align:center;color:var(--muted,#6b7a99);padding:1.2rem;white-space:normal}
 .pv-table td.pv-cand{color:var(--pv-bad);font-style:italic}
+
+/* ── Hoofdproject vs. gevonden in subproject: duidelijk kleurverschil ── */
+:root{ --pv-own-bg:rgba(30,58,110,.38); --pv-own-hd:#1e3a6e; --pv-rel-bg:rgba(0,180,216,.17); --pv-rel-hd:#006b82; --pv-cmp-hd:#3a2a5c; --pv-sep:#00B4D8; }
+html[data-theme="light"]{ --pv-own-bg:#E2E8F3; --pv-own-hd:#1e3a6e; --pv-rel-bg:#D3EFF5; --pv-rel-hd:#00809A; --pv-cmp-hd:#4B3A75; --pv-sep:#00809A; }
+.pv-table th.pv-own{background:var(--pv-own-hd)}
+.pv-table th.pv-rel{background:var(--pv-rel-hd)}
+.pv-table th.pv-cmp{background:var(--pv-cmp-hd)}
+.pv-table tr.pv-band th{font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;cursor:default;padding:.3rem .5rem}
+.pv-table tbody td.pv-own{background:var(--pv-own-bg)}
+.pv-table tbody td.pv-rel{background:var(--pv-rel-bg)}
+.pv-table .pv-first{border-left:3px solid var(--pv-sep)}
+.pv-table tr:not(.pv-band) th{top:24px}
+.pv-table tbody tr:hover td{filter:brightness(1.18)}
+.pv-inco{display:inline-block;font-family:var(--mono,'JetBrains Mono',monospace);font-weight:700;font-size:.62rem;padding:.05rem .35rem;border-radius:4px;margin-right:.35rem;border:1px solid currentColor}
+.pv-table td.pv-inco-d .pv-inco{color:var(--pv-ok)}
+.pv-table td.pv-inco-c .pv-inco{color:#f5b041}
+.pv-table td.pv-inco-ef .pv-inco{color:var(--pv-bad)}
+.pv-legend{font-family:var(--mono,'JetBrains Mono',monospace);font-size:.64rem;color:var(--pv-fg);margin:.2rem 0 .5rem;display:flex;gap:1rem;flex-wrap:wrap}
+.pv-legend .pv-inco{margin-right:.25rem}
+.pv-table td{max-width:190px}
+/* Afwijking altijd zichtbaar (vast aan de rechterkant) */
+.pv-table th.pv-cmp,.pv-table td.pv-cmp{position:sticky;right:0;z-index:1}
+.pv-table th.pv-cmp{z-index:3}
+.pv-table tbody td.pv-cmp{background:var(--navy-mid,#0F2040)}
+html[data-theme="light"] .pv-table tbody td.pv-cmp{background:#F4F1FA}
